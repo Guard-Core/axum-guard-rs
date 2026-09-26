@@ -758,7 +758,7 @@ server), not immunity: it sets the same skip state a whitelist match sets
 (<code>IpGateDecision</code> in the request extensions) but never adds a deny path and
 never opens the whitelist gate. The blacklist, bans-style checks, and
 detection still apply to exempt IPs - an attack payload from an exempt IP is
-still <code>403 Suspicious activity detected</code>. The Rust family ships no rate
+still <code>400 Suspicious activity detected</code>. The Rust family ships no rate
 limiter, user-agent filter, cloud-provider blocker, or violation counter yet;
 a stage that lands later must skip exactly what the reference skips for a
 whitelist match and never skip detection.</p>
@@ -928,7 +928,7 @@ whitelist match and never skip detection.</p>
 <tbody>
 <tr>
 <td>Engine flags a view</td>
-<td><code>403 Forbidden</code></td>
+<td><code>400 Bad Request</code></td>
 <td><code>Suspicious activity detected</code></td>
 </tr>
 <tr>
