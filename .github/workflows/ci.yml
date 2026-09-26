@@ -54,7 +54,7 @@ jobs:
           # companion, rennf93/guard-core-rs#34. Same dance as the earlier
           # body-value and exempt-ips pins; points back at master once that
           # merges.
-          ref: 54a6bc6
+          ref: 54a6bc6e6e2115dea5abaed6b5346c887b9ee8e5
           path: core-checkout
           persist-credentials: false
 
@@ -111,7 +111,7 @@ jobs:
           # companion, rennf93/guard-core-rs#34. Same dance as the earlier
           # body-value and exempt-ips pins; points back at master once that
           # merges.
-          ref: 54a6bc6
+          ref: 54a6bc6e6e2115dea5abaed6b5346c887b9ee8e5
           path: core-checkout
           persist-credentials: false
 
