@@ -4,6 +4,12 @@ All notable changes to this project.
 
 ## [Unreleased]
 
+### Added
+
+- The stateful stage from `tower-guard-rs` (rate limiting, dynamic bans, auto-ban), exposed for axum with no new code: `with_guard(detect_config).with_rate_limiting(RateLimiter)` answers a sliding-window crossing with `429 Too Many Requests` carrying `Retry-After: <window seconds>`, and `with_ip_banning(IpBanManager, IpBanConfig)` answers a live ban with `403 Forbidden` (`IP address banned`) before the limiter (banned traffic never consumes rate budget), counts every detected threat's categories per client IP, and bans on the spot with `403 Forbidden` (`IP has been banned`) when a `threat_ban_config` entry or the flat `auto_ban_threshold` crosses. With the limiter's `enable_rate_limit_auto_ban` on, every crossing counts one `rate_limit` violation (the response stays 429, the ban bites the next request); with `enable_ip_banning = false` violations count but never ban. Both stages honor the `exempt_ips` contract (whitelisted and exempt IPs are never rate limited, never banned, never counted) and unattributed requests (no `client_ip_layer()`) skip the stage but stay detection-screened
+- Re-exports for the stateful surface (`RateLimiter`, `RateLimitConfig`, `RateLimitConfigError`, `RateLimitDecision`, `IpBanManager`, `IpBanConfig`, `IpBanConfigError`, `BanRecord`, `BanError`, `ResolvedBan`, `ThreatBanEntry`, `ViolationCounters`, `Clock`, `BANNED_MESSAGE`, `ACTIVITY_BANNED_MESSAGE`, `RATE_LIMITED_MESSAGE`)
+- An axum-level stateful-stage test suite in `tests/axum.rs` (crossing shape with `Retry-After`, exempt IP under load, live ban before detection and the limiter, ban expiry via a fake clock, category-threshold and rate-limit auto-ban, disabled banning, unattributed skip), mirroring the tower reference suite
+
 ### Changed
 
 - Detection blocks now answer `400 Bad Request` with `Suspicious activity detected` (the reference suspicious-activity stage's shape) instead of `403 Forbidden`; the shape comes from `tower-guard-rs`, so this is a documentation and test-expectation update here. Live-ban `403 Forbidden` denials are unchanged.
