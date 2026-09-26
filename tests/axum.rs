@@ -358,3 +358,363 @@ fn ipv4_mapped_peer_matches_v4_entries() {
         axum_guard_rs::IpGateVerdict::Allowed(decision) if decision.is_exempt
     ));
 }
+
+// --- the stateful stage: rate limiting, bans, auto-ban ---
+
+use axum_guard_rs::{
+    ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, IpBanConfig, IpBanManager, RATE_LIMITED_MESSAGE,
+    RateLimitConfig, RateLimiter, ThreatBanEntry,
+};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// An enabled rate limiter with the given limit and auto-ban switch.
+fn limiter(limit: u32, auto_ban: bool) -> RateLimiter {
+    RateLimiter::new(RateLimitConfig {
+        enable_rate_limiting: true,
+        rate_limit: limit,
+        rate_limit_window: 60,
+        enable_rate_limit_auto_ban: auto_ban,
+    })
+    .expect("valid config")
+}
+
+/// The empty `threat_ban_config`, typed for `IpBanConfig::new`.
+fn no_entries() -> Vec<(String, ThreatBanEntry)> {
+    Vec::new()
+}
+
+/// A fake clock (unix seconds starting at `1_000`) plus its handle, for
+/// deterministic ban-expiry coverage.
+fn fake_clock() -> (axum_guard_rs::Clock, Arc<AtomicU64>) {
+    let state = Arc::new(AtomicU64::new(1_000));
+    let clock: axum_guard_rs::Clock = {
+        let seconds = state.clone();
+        #[allow(clippy::cast_precision_loss)]
+        Arc::new(move || seconds.load(Ordering::Relaxed) as f64)
+    };
+    (clock, state)
+}
+
+/// A router guarded by the given layer, with the client-ip layer applied
+/// after the guard so the extension is in place when the guard runs.
+fn guarded_app(layer: axum_guard_rs::GuardLayer) -> Router {
+    Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(layer)
+        .layer(client_ip_layer())
+}
+
+/// Status, body, and the `Retry-After` header of one guarded request.
+async fn full_status(app: Router, request: Request<Body>) -> (StatusCode, String, Option<String>) {
+    let response = app.oneshot(request).await.expect("response");
+    let status = response.status();
+    let retry_after = response
+        .headers()
+        .get(http::header::RETRY_AFTER)
+        .map(|value| value.to_str().expect("ascii header").to_owned());
+    (status, body_text(response).await, retry_after)
+}
+
+async fn status_body(app: Router, request: Request<Body>) -> (StatusCode, String) {
+    let (status, body, _) = full_status(app, request).await;
+    (status, body)
+}
+
+#[tokio::test]
+async fn rate_limit_crossing_is_blocked_429_with_retry_after() {
+    let app = guarded_app(with_guard(default_config()).with_rate_limiting(limiter(2, false)));
+    for _ in 0..2 {
+        let (status, _, retry_after) =
+            full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(retry_after, None, "allowed requests carry no Retry-After");
+    }
+    let (status, body, retry_after) =
+        full_status(app, attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(body, RATE_LIMITED_MESSAGE);
+    assert_eq!(
+        retry_after.as_deref(),
+        Some("60"),
+        "Retry-After is the window"
+    );
+}
+
+#[tokio::test]
+async fn exempt_ip_exceeds_the_limit_and_still_gets_200() {
+    // Checklist: the exempt flag is observable - exemption skips rate
+    // limiting exactly like a whitelist match.
+    let gate =
+        IpGateConfig::new([] as [&str; 0], [] as [&str; 0], ["198.51.100.7"]).expect("valid lists");
+    let app = guarded_app(
+        with_guard(default_config())
+            .with_ip_gate(gate)
+            .with_rate_limiting(limiter(1, false)),
+    );
+    for _ in 0..5 {
+        let (status, _, _) =
+            full_status(app.clone(), attributed_request("/hello", "198.51.100.7")).await;
+        assert_eq!(status, StatusCode::OK, "exempt IPs are never rate limited");
+    }
+    // A non-exempt peer under the same config is limited as usual.
+    let (status, _, _) = full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = full_status(app, attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn unattributed_requests_are_not_rate_limited() {
+    // No `ConnectInfo` extension: the request cannot be attributed, so the
+    // stateful stage skips it (detection still screens).
+    let app = guarded_app(with_guard(default_config()).with_rate_limiting(limiter(1, false)));
+    for _ in 0..5 {
+        let (status, _, _) = full_status(app.clone(), get_request("/hello")).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+}
+
+#[tokio::test]
+async fn banned_ip_is_blocked_with_the_banned_body() {
+    let manager = IpBanManager::new();
+    let config = IpBanConfig::new(true, 10, 3600, no_entries()).expect("valid config");
+    let app = guarded_app(with_guard(default_config()).with_ip_banning(manager.clone(), config));
+    // Ban out of band through the shared handle (an operator or the auto-ban
+    // engine did it).
+    manager
+        .ban_ip(
+            std::net::IpAddr::from_str("192.0.2.55").unwrap(),
+            60,
+            "operator",
+        )
+        .expect("ban");
+    let (status, body) = status_body(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
+
+    // Other IPs are untouched.
+    let (status, _, _) = full_status(app, attributed_request("/hello", "192.0.2.56")).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn ban_expiry_is_honored_for_a_short_duration() {
+    let (clock, seconds) = fake_clock();
+    let manager = IpBanManager::with_clock(clock);
+    let config = IpBanConfig::new(true, 10, 3600, no_entries()).expect("valid config");
+    let app = guarded_app(with_guard(default_config()).with_ip_banning(manager.clone(), config));
+    manager
+        .ban_ip(
+            std::net::IpAddr::from_str("192.0.2.55").unwrap(),
+            5,
+            "short",
+        )
+        .expect("ban");
+    let (status, body) = status_body(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
+
+    seconds.store(1_000 + 6, Ordering::Relaxed);
+    let (status, _, _) = full_status(app, attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::OK, "the ban expired");
+}
+
+#[tokio::test]
+async fn banned_ip_blocks_before_detection_and_rate_limiting() {
+    let manager = IpBanManager::new();
+    let config = IpBanConfig::new(true, 10, 3600, no_entries()).expect("valid config");
+    let app = guarded_app(
+        with_guard(default_config())
+            .with_rate_limiting(limiter(1, false))
+            .with_ip_banning(manager.clone(), config),
+    );
+    manager
+        .ban_ip(
+            std::net::IpAddr::from_str("192.0.2.55").unwrap(),
+            60,
+            "operator",
+        )
+        .expect("ban");
+    // An attack from the banned IP: the ban stage wins over the detection
+    // block shape...
+    let (status, body) = status_body(
+        app.clone(),
+        attributed_request("/files/../../etc/passwd", "192.0.2.55"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
+    // ...and over the rate limiter: banned traffic never consumes budget.
+    let (status, body) = status_body(
+        app,
+        attributed_request("/files/../../etc/passwd", "192.0.2.55"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
+}
+
+#[tokio::test]
+async fn detection_violations_ban_at_the_category_threshold() {
+    let config = IpBanConfig::new(
+        true,
+        100,
+        3600,
+        [(
+            "dir_traversal",
+            ThreatBanEntry {
+                threshold: 2,
+                duration: 60,
+            },
+        )],
+    )
+    .expect("valid config");
+    let app =
+        guarded_app(with_guard(default_config()).with_ip_banning(IpBanManager::new(), config));
+    // First violation: the plain block shape.
+    let (status, body) = status_body(
+        app.clone(),
+        attributed_request("/files/../../etc/passwd", "192.0.2.55"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, BLOCKED_MESSAGE);
+    // Second violation crosses the entry: banned on the spot.
+    let (status, body) = status_body(
+        app.clone(),
+        attributed_request("/files/../../etc/passwd", "192.0.2.55"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, ACTIVITY_BANNED_MESSAGE);
+    // From then on the ban stage answers everything.
+    let (status, body) = status_body(app, attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
+}
+
+#[tokio::test]
+async fn enable_ip_banning_false_never_bans() {
+    let config = IpBanConfig::new(
+        false,
+        1,
+        3600,
+        [(
+            "dir_traversal",
+            ThreatBanEntry {
+                threshold: 1,
+                duration: 60,
+            },
+        )],
+    )
+    .expect("valid config");
+    let app =
+        guarded_app(with_guard(default_config()).with_ip_banning(IpBanManager::new(), config));
+    for _ in 0..3 {
+        let (status, body) = status_body(
+            app.clone(),
+            attributed_request("/files/../../etc/passwd", "192.0.2.55"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body, BLOCKED_MESSAGE,
+            "banning is off: the plain block shape"
+        );
+    }
+    let (status, _, _) = full_status(app, attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::OK, "nobody was banned");
+}
+
+#[tokio::test]
+async fn exempt_ip_never_counts_detection_violations() {
+    // Checklist: the exempt flag makes violation counting observable - an
+    // exempt attacker can never be auto-banned.
+    let gate =
+        IpGateConfig::new([] as [&str; 0], [] as [&str; 0], ["198.51.100.7"]).expect("valid lists");
+    let config = IpBanConfig::new(
+        true,
+        1,
+        3600,
+        [(
+            "dir_traversal",
+            ThreatBanEntry {
+                threshold: 1,
+                duration: 60,
+            },
+        )],
+    )
+    .expect("valid config");
+    let app = guarded_app(
+        with_guard(default_config())
+            .with_ip_gate(gate)
+            .with_ip_banning(IpBanManager::new(), config),
+    );
+    for _ in 0..3 {
+        let (status, body) = status_body(
+            app.clone(),
+            attributed_request("/files/../../etc/passwd", "198.51.100.7"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body, BLOCKED_MESSAGE,
+            "exempt violations are not counted, so no ban can fire"
+        );
+    }
+}
+
+#[tokio::test]
+async fn rate_limit_autoban_is_off_by_default() {
+    let config = IpBanConfig::new(true, 1, 3600, no_entries()).expect("valid config");
+    let app = guarded_app(
+        with_guard(default_config())
+            .with_rate_limiting(limiter(1, false))
+            .with_ip_banning(IpBanManager::new(), config),
+    );
+    let (status, _, _) = full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::OK);
+    for _ in 0..5 {
+        let (status, body, _) =
+            full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(body, RATE_LIMITED_MESSAGE, "crossings stay rate limited");
+    }
+}
+
+#[tokio::test]
+async fn rate_limit_autoban_bans_at_the_threshold() {
+    let config = IpBanConfig::new(
+        true,
+        100,
+        3600,
+        [(
+            "rate_limit",
+            ThreatBanEntry {
+                threshold: 2,
+                duration: 30,
+            },
+        )],
+    )
+    .expect("valid config");
+    let app = guarded_app(
+        with_guard(default_config())
+            .with_rate_limiting(limiter(1, true))
+            .with_ip_banning(IpBanManager::new(), config),
+    );
+    let (status, _, _) = full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::OK);
+    // First crossing: violation 1, below the entry threshold.
+    let (status, body, _) =
+        full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(body, RATE_LIMITED_MESSAGE);
+    // Second crossing: violation 2 crosses the entry, the ban fires (the
+    // response of this request is still the 429 it earned).
+    let (status, _, _) = full_status(app.clone(), attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    // From then on the ban stage answers first.
+    let (status, body, _) = full_status(app, attributed_request("/hello", "192.0.2.55")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
+}

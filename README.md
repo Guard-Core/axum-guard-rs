@@ -52,9 +52,43 @@ The HTTP method is not fed to the engine: the engine's `detect(content, context,
 
 | Situation | Status | Body |
 |---|---|---|
+| The IP gate denies the client IP (blacklisted, or a non-empty whitelist matches neither the IP nor an exemption) | `403 Forbidden` | `Forbidden` |
+| The ban stage finds a live ban on the client IP | `403 Forbidden` | `IP address banned` |
+| The rate limiter records a crossing of `rate_limit` | `429 Too Many Requests` (+ `Retry-After: <window>`) | `Too many requests` |
 | Engine flags a view | `400 Bad Request` | `Suspicious activity detected` |
+| Engine flags a view and the crossed auto-ban threshold bans on the spot | `403 Forbidden` | `IP has been banned` |
 | Body exceeds the cap | `413 Payload Too Large` | `Payload too large` |
 | Body read error or engine panic | `500 Internal Server Error` | `Security check failed` |
+
+## Rate limiting, bans, and auto-ban
+
+Two opt-in builders on the layer install the engine's stateful machinery, mirroring the tower reference:
+
+```rust
+let limiter = axum_guard_rs::RateLimiter::new(axum_guard_rs::RateLimitConfig {
+    enable_rate_limiting: true,
+    rate_limit: 30,
+    rate_limit_window: 10,
+    ..axum_guard_rs::RateLimitConfig::default()
+})
+.expect("valid config");
+let bans = axum_guard_rs::IpBanConfig::new(
+    true,
+    10,
+    3600,
+    [] as [(String, axum_guard_rs::ThreatBanEntry); 0],
+)
+.expect("valid config");
+
+let layer = axum_guard_rs::with_guard(axum_guard_rs::default_config())
+    .with_rate_limiting(limiter)
+    .with_ip_banning(axum_guard_rs::IpBanManager::new(), bans);
+let app = Router::new().layer(layer);
+```
+
+A rate-limit crossing answers `429 Too Many Requests` with `Retry-After: <window seconds>`; with the limiter's `enable_rate_limit_auto_ban` on, every crossing counts one `rate_limit` violation toward the auto-ban engine (the response stays 429, the ban bites on the next request). A live ban answers `403 Forbidden` (`IP address banned`) before the limiter, so banned traffic never consumes rate budget. Every detected threat counts its categories per client IP; a crossed `threat_ban_config` entry (or the flat `auto_ban_threshold`) bans on the spot with `403 Forbidden` (`IP has been banned`), while the plain detection block stays `400`. With `enable_ip_banning = false`, violations count but never ban.
+
+Both stages honor the `exempt_ips` contract (see the `with_ip_gate` docs): whitelisted and exempt IPs are never rate limited, never banned, and never counted; requests without attribution (no `ConnectInfo<SocketAddr>`, so no `client_ip_layer()`) skip the stage but stay detection-screened. The limiter and ban store are process-global by design, so cloning the layer or the `IpBanManager` shares one store (admin unban endpoints and stats work out of band).
 
 The bodies follow the ecosystem's plain-text error convention (the bare message, `text/plain; charset=utf-8`, same as the Python family), but the adapter is deliberately **fail-secure**: unlike the TypeScript adapters, whose check pipeline logs and skips on error, any failure to complete the security check answers `500`, never an uninspected passthrough.
 

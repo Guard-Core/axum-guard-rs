@@ -29,6 +29,65 @@
 //! documentation for the full behavior tables, response shapes, and the
 //! header exclusion list.
 //!
+//! ## The stateful stage: rate limiting, bans, auto-ban
+//!
+//! Two opt-in builders on [`GuardLayer`] install the engine's stateful
+//! machinery, mirroring the tower reference exactly:
+//!
+//! - [`GuardLayer::with_rate_limiting`]: a crossing of the
+//!   sliding window answers `429 Too Many Requests` carrying
+//!   `Retry-After: <window seconds>`. With the limiter's
+//!   `enable_rate_limit_auto_ban` on, every crossing counts one `rate_limit`
+//!   violation toward the auto-ban engine; the response stays 429 and the ban
+//!   bites on the next request.
+//! - [`GuardLayer::with_ip_banning`]: a live ban on
+//!   the client IP answers `403 Forbidden` (`IP address banned`) **before**
+//!   the limiter, so banned traffic never consumes rate budget. Every detected
+//!   threat counts its categories per client IP, and a crossed
+//!   `threat_ban_config` entry (or the flat `auto_ban_threshold`) bans on the
+//!   spot, answering `403 Forbidden` (`IP has been banned`); without it the
+//!   plain detection block stays `400 Bad Request`. With
+//!   `enable_ip_banning = false` violations count but never ban.
+//!
+//! Both stages honor the `exempt_ips` contract: whitelisted and exempt IPs
+//! (via [`client_ip_layer`] + [`IpGateConfig`]) are never rate limited, never
+//! banned, and never counted, and unattributed requests (no
+//! `ConnectInfo<SocketAddr>`, so no [`GuardClientIp`]) skip the stage but
+//! stay detection-screened. Cloning the layer shares the one limiter and ban
+//! store: they are process-global by design.
+//!
+//! # Example
+//!
+//! ```
+//! use axum::Router;
+//! use axum::routing::get;
+//! use axum_guard_rs::{IpBanConfig, IpBanManager, RateLimitConfig, RateLimiter, ThreatBanEntry, with_guard};
+//!
+//! let limiter = RateLimiter::new(RateLimitConfig {
+//!     enable_rate_limiting: true,
+//!     rate_limit: 30,
+//!     rate_limit_window: 10,
+//!     ..RateLimitConfig::default()
+//! })
+//! .expect("valid config");
+//! let bans = IpBanConfig::new(
+//!     true,
+//!     10,
+//!     3600,
+//!     [] as [(String, ThreatBanEntry); 0],
+//! )
+//! .expect("valid config");
+//!
+//! let app: Router = Router::new()
+//!     .route("/hello", get(|| async { "hello" }))
+//!     .layer(
+//!         with_guard(axum_guard_rs::default_config())
+//!             .with_rate_limiting(limiter)
+//!             .with_ip_banning(IpBanManager::new(), bans),
+//!     );
+//! # let _ = app;
+//! ```
+//!
 //! ## Example
 //!
 //! ```
@@ -69,9 +128,12 @@
 //! ```
 
 pub use tower_guard_rs::{
-    BLOCKED_MESSAGE, BoxError, DetectConfig, DetectVerdict, FAILURE_MESSAGE, FORBIDDEN_MESSAGE,
-    GuardBody, GuardClientIp, GuardLayer, GuardService, IpGateConfig, IpGateDecision, IpGateDenial,
-    IpGateError, IpGateVerdict, OVERSIZE_MESSAGE, Threat, default_config,
+    ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord, BoxError, Clock,
+    DetectConfig, DetectVerdict, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GuardBody, GuardClientIp,
+    GuardLayer, GuardService, IpBanConfig, IpBanConfigError, IpBanManager, IpGateConfig,
+    IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict, OVERSIZE_MESSAGE,
+    RATE_LIMITED_MESSAGE, RateLimitConfig, RateLimitConfigError, RateLimitDecision, RateLimiter,
+    ResolvedBan, Threat, ThreatBanEntry, ViolationCounters, default_config,
 };
 
 use axum::extract::connect_info::ConnectInfo;
@@ -158,8 +220,10 @@ pub const fn client_ip_layer() -> ClientIpLayer {
 ///
 /// Apply it with [`Router::layer`](axum::Router::layer) (every registered
 /// route) or [`Router::route_layer`](axum::Router::route_layer) (routes only,
-/// skipping the fallback). Chain
-/// [`GuardLayer::with_body_cap`] to change the body buffering cap.
+/// skipping the fallback). Chain [`GuardLayer::with_body_cap`] to change the
+/// body buffering cap, [`GuardLayer::with_ip_gate`] to install the global IP
+/// gate, and [`GuardLayer::with_rate_limiting`] / [`GuardLayer::with_ip_banning`]
+/// to install the stateful stage (rate limiting, dynamic bans, auto-ban).
 ///
 /// # Example
 ///
