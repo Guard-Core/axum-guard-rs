@@ -55,9 +55,8 @@ jobs:
         with:
           # Merged as rennf93/guard-core-rs#22; tracks master.
           repository: rennf93/guard-core-rs
-          # TEMPORARY pin: the guard-core-rs#34 companion (400 detection
-          # shape); points back at master once it merges.
-          ref: 54a6bc6e6e2115dea5abaed6b5346c887b9ee8e5
+          # Merged as rennf93/guard-core-rs#34; tracks master.
+          ref: master
           path: core-checkout
           persist-credentials: false
 
