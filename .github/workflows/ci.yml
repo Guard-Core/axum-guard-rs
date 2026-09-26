@@ -50,11 +50,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           repository: rennf93/guard-core-rs
-          # TEMPORARY pin: the reference-defaults/passive-mode/400-shape
-          # companion, rennf93/guard-core-rs#34. Same dance as the earlier
-          # body-value and exempt-ips pins; points back at master once that
-          # merges.
-          ref: 54a6bc6e6e2115dea5abaed6b5346c887b9ee8e5
+          ref: master
           path: core-checkout
           persist-credentials: false
 
@@ -107,11 +103,7 @@ jobs:
         with:
           # Merged as rennf93/guard-core-rs#22; tracks master.
           repository: rennf93/guard-core-rs
-          # TEMPORARY pin: the reference-defaults/passive-mode/400-shape
-          # companion, rennf93/guard-core-rs#34. Same dance as the earlier
-          # body-value and exempt-ips pins; points back at master once that
-          # merges.
-          ref: 54a6bc6e6e2115dea5abaed6b5346c887b9ee8e5
+          ref: master
           path: core-checkout
           persist-credentials: false
 
