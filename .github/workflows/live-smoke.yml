@@ -55,7 +55,9 @@ jobs:
         with:
           # Merged as rennf93/guard-core-rs#22; tracks master.
           repository: rennf93/guard-core-rs
-          ref: master
+          # TEMPORARY pin: the guard-core-rs#34 companion (400 detection
+          # shape); points back at master once it merges.
+          ref: 54a6bc6
           path: core-checkout
           persist-credentials: false
 
@@ -94,20 +96,20 @@ jobs:
           # with the adapter's plain-text error body.
           code=$(curl -sS --max-time 10 -o /tmp/smoke_body -w '%{http_code}' \
             -G "$base/search" --data-urlencode 'q=<script>alert(1)</script>')
-          if [ "$code" != "403" ]; then
-            echo "FAIL: XSS query param (expected 403, got $code)"; exit 1
+          if [ "$code" != "400" ]; then
+            echo "FAIL: XSS query param (expected 400, got $code)"; exit 1
           fi
           grep -q "Suspicious activity detected" /tmp/smoke_body || { echo "FAIL: suspicious body"; exit 1; }
-          echo "ok: XSS query param -> 403 suspicious block"
+          echo "ok: XSS query param -> 400 suspicious block"
 
           # Penetration detection: traversal in the path view.
           code=$(curl -sS --max-time 10 --path-as-is -o /tmp/smoke_body -w '%{http_code}' \
             "$base/files/../../etc/passwd")
-          if [ "$code" != "403" ]; then
-            echo "FAIL: path traversal (expected 403, got $code)"; exit 1
+          if [ "$code" != "400" ]; then
+            echo "FAIL: path traversal (expected 400, got $code)"; exit 1
           fi
           grep -q "Suspicious activity detected" /tmp/smoke_body || { echo "FAIL: traversal body"; exit 1; }
-          echo "ok: path traversal -> 403 suspicious block"
+          echo "ok: path traversal -> 400 suspicious block"
 
           # Body cap: a body over the buffering cap is rejected with 413
           # instead of being forwarded unscanned.

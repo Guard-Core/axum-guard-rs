@@ -64,7 +64,7 @@
 //!     .oneshot(request)
 //!     .await
 //!     .unwrap();
-//! assert_eq!(response.status(), 403);
+//! assert_eq!(response.status(), 400);
 //! # });
 //! ```
 

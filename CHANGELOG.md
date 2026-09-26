@@ -4,6 +4,10 @@ All notable changes to this project.
 
 ## [Unreleased]
 
+### Changed
+
+- Detection blocks now answer `400 Bad Request` with `Suspicious activity detected` (the reference suspicious-activity stage's shape) instead of `403 Forbidden`; the shape comes from `tower-guard-rs`, so this is a documentation and test-expectation update here. Live-ban `403 Forbidden` denials are unchanged.
+
 ## [1.1.0] - 2026-09-26
 
 ### Added

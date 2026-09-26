@@ -100,7 +100,7 @@ async fn xss_payload_in_body_is_blocked() {
         .await
         .expect("response");
 
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert_eq!(
         response.headers().get(CONTENT_TYPE).expect("content type"),
         "text/plain; charset=utf-8"
@@ -114,7 +114,7 @@ async fn traversal_payload_in_path_is_blocked_in_url_path_context() {
         .oneshot(get_request("/files/../../etc/passwd"))
         .await
         .expect("response");
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -123,7 +123,7 @@ async fn command_injection_in_query_is_blocked_in_query_param_context() {
         .oneshot(get_request("/hello?cmd=$(whoami)"))
         .await
         .expect("response");
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -134,7 +134,7 @@ async fn xss_payload_in_scanned_header_is_blocked() {
         .body(Body::empty())
         .expect("request");
     let response = app().oneshot(request).await.expect("response");
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -201,7 +201,7 @@ async fn concurrent_requests_are_screened_independently() {
         if index % 2 == 0 {
             assert_eq!(status, StatusCode::OK, "benign request {index}");
         } else {
-            assert_eq!(status, StatusCode::FORBIDDEN, "threat request {index}");
+            assert_eq!(status, StatusCode::BAD_REQUEST, "threat request {index}");
         }
     }
 }
@@ -320,7 +320,7 @@ async fn an_attack_from_an_exempt_ip_is_still_blocked_by_detection() {
         attributed_request("/files/../../etc/passwd", "198.51.100.7"),
     )
     .await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body, BLOCKED_MESSAGE);
 }
 
@@ -336,7 +336,7 @@ async fn without_connect_info_the_gate_is_inert_and_detection_still_applies() {
     assert_eq!(status, StatusCode::OK, "unattributed benign traffic passes");
 
     let (status, body) = gated_status(app, get_request("/files/../../etc/passwd")).await;
-    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body, BLOCKED_MESSAGE);
 }
 
