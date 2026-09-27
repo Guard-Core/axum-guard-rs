@@ -4,7 +4,7 @@ Application-layer security middleware for [axum](https://github.com/tokio-rs/axu
 
 Docs: <https://rennf93.github.io/axum-guard-rs/>
 
-**Status:** Released. Version 1.1.0, published to crates.io. `with_guard(config)` returns a `tower` layer that drops straight into `Router::layer`.
+**Status:** Released. Version 1.2.0, published to crates.io. `with_guard(config)` returns a `tower` layer that drops straight into `Router::layer`.
 
 ## About
 
@@ -113,11 +113,11 @@ Note that `Router::layer` applies the layer to registered routes; a request that
 
 ## Engine dependency
 
-The Cargo.toml pins `tower-guard-rs` 1.1.0 plus `guard-core-engine`/`guard-core-rs` 4.1.0, and carries paths pointing at sibling checkouts (`../tower-guard-rs`, `../guard-core-rs/crates/guard-core-engine`, `../guard-core-rs/crates/guard-core-rs`) so local builds and CI compile the dependencies from source. Registry note, stated plainly: the 4.1.0 dists of `guard-core-engine` and `guard-core-rs` are currently yanked on crates.io, so the published 1.1.0 of this crate and of `tower-guard-rs` cannot resolve their engine from the registry alone (a fresh `cargo add axum-guard-rs` falls back to the 1.0.0/4.0.4 pair). Resolution is restored at the synchronized 4.2.0 train; until then the sibling path dependencies are the working route.
+The Cargo.toml pins `tower-guard-rs` 1.2.0 plus `guard-core-engine`/`guard-core-rs` 4.2.0, and carries paths pointing at sibling checkouts (`../tower-guard-rs`, `../guard-core-rs/crates/guard-core-engine`, `../guard-core-rs/crates/guard-core-rs`) so local builds and CI compile the dependencies from source. Registry note, stated plainly: the 4.1.0 dists were yanked (the version-accuracy fix for the family tag mistake), so 1.1.0 could not resolve its engine from the registry alone; the synchronized 4.2.0 train restores resolution (`axum-guard-rs` 1.2.0 over `tower-guard-rs` 1.2.0 and `guard-core-engine`/`guard-core-rs` 4.2.0).
 
 CI checks out both sibling repositories (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)), mirroring the sibling adapter pattern in `laravel-guard`/`symfony-guard`.
 
-The engine crate is used directly for the detect path; the `guard-core-rs` facade is also a dependency (its `events` module backs the `SecurityEventBus` re-exports and the test assertions). The facade re-exports the full engine stage set (`compiler`, `preprocessor`, `semantic`, `detect`, `detection_exclusions`) since 4.1.0, so nothing is blocked on the facade anymore.
+The engine crate is used directly for the detect path; the `guard-core-rs` facade is also a dependency (its `events` module backs the `SecurityEventBus` re-exports and the test assertions). The facade re-exports the full engine stage set (`compiler`, `preprocessor`, `semantic`, `detect`, `detection_exclusions`), so nothing is blocked on the facade.
 
 ## Development
 
