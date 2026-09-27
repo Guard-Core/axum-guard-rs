@@ -30,6 +30,8 @@ tower = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 bytes = "1.10"
+guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine", version = "4.1.0" }
+guard-core-rs = { path = "../guard-core-rs/crates/guard-core-rs", version = "4.1.0" }
 http = "1.3"
 http-body-util = "0.1"
 serde = { version = "1", features = ["derive"] }

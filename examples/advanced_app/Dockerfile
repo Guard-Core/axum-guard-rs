@@ -13,6 +13,7 @@ WORKDIR /build
 COPY --from=engine /Cargo.toml ./guard-core-rs/Cargo.toml
 COPY --from=engine /Cargo.lock ./guard-core-rs/Cargo.lock
 COPY --from=engine /crates/guard-core-engine ./guard-core-rs/crates/guard-core-engine
+COPY --from=engine /crates/guard-core-rs ./guard-core-rs/crates/guard-core-rs
 
 COPY --from=tower /Cargo.toml ./tower-guard-rs/Cargo.toml
 COPY --from=tower /Cargo.lock ./tower-guard-rs/Cargo.lock

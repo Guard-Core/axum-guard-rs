@@ -629,19 +629,21 @@ async fn enable_ip_banning_false_never_bans() {
 }
 
 #[tokio::test]
-async fn exempt_ip_never_counts_detection_violations() {
-    // Checklist: the exempt flag makes violation counting observable - an
-    // exempt attacker can never be auto-banned.
+async fn exempt_ip_violations_still_count_toward_the_ban() {
+    // Checklist: the exemption skips rate limiting, and the counting gate
+    // is the reference's whitelisted-only skip - an exempt attacker's
+    // detections still feed the auto-ban engine, and a crossed threshold
+    // bans on the spot.
     let gate =
         IpGateConfig::new([] as [&str; 0], [] as [&str; 0], ["198.51.100.7"]).expect("valid lists");
     let config = IpBanConfig::new(
         true,
-        1,
+        100,
         3600,
         [(
             "dir_traversal",
             ThreatBanEntry {
-                threshold: 1,
+                threshold: 2,
                 duration: 60,
             },
         )],
@@ -652,18 +654,19 @@ async fn exempt_ip_never_counts_detection_violations() {
             .with_ip_gate(gate)
             .with_ip_banning(IpBanManager::new(), config),
     );
-    for _ in 0..3 {
-        let (status, body) = status_body(
-            app.clone(),
-            attributed_request("/files/../../etc/passwd", "198.51.100.7"),
-        )
-        .await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(
-            body, BLOCKED_MESSAGE,
-            "exempt violations are not counted, so no ban can fire"
-        );
-    }
+    let attack = || attributed_request("/files/../../etc/passwd", "198.51.100.7");
+    let (status, body) = status_body(app.clone(), attack()).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, BLOCKED_MESSAGE, "violation 1: the plain block shape");
+    let (status, body) = status_body(app.clone(), attack()).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        body, ACTIVITY_BANNED_MESSAGE,
+        "exempt violations count: the crossed threshold bans"
+    );
+    let (status, body) = status_body(app, attributed_request("/hello", "198.51.100.7")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, BANNED_MESSAGE);
 }
 
 #[tokio::test]
@@ -719,4 +722,283 @@ async fn rate_limit_autoban_bans_at_the_threshold() {
     let (status, body, _) = full_status(app, attributed_request("/hello", "192.0.2.55")).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(body, BANNED_MESSAGE);
+}
+
+// ---- the wave surfaces, end to end through the public API ----
+
+use axum_guard_rs::{
+    DetectionExclusionConfig, RateLimitEntry, RouteDetectionExclusions, RouteRateLimits,
+    SecurityEventBus, SlidingWindowStore,
+};
+
+/// A static geolocation: every IP maps to `DE`.
+struct StaticGeo;
+
+impl axum_guard_rs::GeoIpHandler for StaticGeo {
+    fn get_country(&self, ip: std::net::IpAddr) -> Option<String> {
+        let _ = ip;
+        Some("DE".to_owned())
+    }
+}
+
+/// A request attributed to a fixed test client IP.
+fn attributed(uri: &str) -> Request<Body> {
+    Request::builder()
+        .uri(uri)
+        .extension(axum_guard_rs::GuardClientIp(
+            std::net::IpAddr::from_str("192.0.2.90").expect("ip"),
+        ))
+        .body(Body::empty())
+        .expect("request")
+}
+
+#[tokio::test]
+async fn route_tiers_limit_their_paths_through_the_router() {
+    let tiers = Arc::new(|path: &str| {
+        if path.starts_with("/login") {
+            Some(RouteRateLimits::new(Some(1), None, None).expect("valid tiers"))
+        } else {
+            None
+        }
+    });
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .route("/login", get(|| async { "logged in" }))
+        .layer(
+            with_guard(default_config())
+                .with_rate_limiting(limiter(1000, false))
+                .with_route_tiers(tiers),
+        );
+    let response = app
+        .clone()
+        .oneshot(attributed("/login"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(attributed("/login"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        response
+            .headers()
+            .get(http::header::RETRY_AFTER)
+            .map(|value| value.to_str().expect("ascii").to_owned()),
+        Some("60".to_owned())
+    );
+    let response = app
+        .clone()
+        .oneshot(attributed("/hello"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK, "other paths unaffected");
+}
+
+#[tokio::test]
+async fn geo_tiers_limit_the_resolved_country_through_the_router() {
+    let mut geo = std::collections::HashMap::new();
+    geo.insert(
+        "DE".to_owned(),
+        RateLimitEntry::new(1, 60).expect("valid entry"),
+    );
+    let tiers = Arc::new(move |_path: &str| {
+        Some(RouteRateLimits::new(None, None, Some(geo.clone())).expect("valid tiers"))
+    });
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config())
+                .with_rate_limiting(limiter(1000, false))
+                .with_route_tiers(tiers)
+                .with_geo_handler(Arc::new(StaticGeo)),
+        );
+    let response = app
+        .clone()
+        .oneshot(attributed("/hello"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app.oneshot(attributed("/hello")).await.expect("response");
+    assert_eq!(
+        response.status(),
+        StatusCode::TOO_MANY_REQUESTS,
+        "the DE tier crossed"
+    );
+}
+
+#[tokio::test]
+async fn excluded_detection_params_pass_through_the_router() {
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config()).with_detection_exclusions(DetectionExclusionConfig {
+                excluded_detection_params: vec!["q".to_owned()],
+                ..DetectionExclusionConfig::default()
+            }),
+        );
+    let response = app
+        .clone()
+        .oneshot(get_request("/hello?q=1+OR+1%3D1"))
+        .await
+        .expect("response");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "the excluded param is not scanned"
+    );
+    let response = app
+        .oneshot(get_request("/hello?page=1+OR+1%3D1"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn route_detection_exclusions_override_the_global_config() {
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config())
+                .with_detection_exclusions(DetectionExclusionConfig {
+                    excluded_detection_params: vec!["q".to_owned()],
+                    ..DetectionExclusionConfig::default()
+                })
+                // The per-route decorator surface rides the request the way
+                // an axum middleware or handler would insert it.
+                .with_route_tiers(Arc::new(|_path: &str| None)),
+        );
+    let mut request = get_request("/hello?q=1+OR+1%3D1");
+    request.extensions_mut().insert(RouteDetectionExclusions {
+        excluded_detection_params: Some(vec![]),
+        ..RouteDetectionExclusions::default()
+    });
+    let response = app.oneshot(request).await.expect("response");
+    assert_eq!(
+        response.status(),
+        StatusCode::BAD_REQUEST,
+        "the route re-enables the param surface"
+    );
+}
+
+#[tokio::test]
+async fn passive_mode_records_but_never_blocks_through_the_router() {
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config())
+                .with_rate_limiting(limiter(1, false))
+                .with_passive_mode(true),
+        );
+    let attack = Request::builder()
+        .uri("/hello?cmd=$(whoami)")
+        .extension(axum_guard_rs::GuardClientIp(
+            std::net::IpAddr::from_str("192.0.2.91").expect("ip"),
+        ))
+        .body(Body::empty())
+        .expect("request");
+    let response = app.clone().oneshot(attack).await.expect("response");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "passive: the detection block is log-only"
+    );
+    let response = app
+        .clone()
+        .oneshot(attributed("/hello"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app.oneshot(attributed("/hello")).await.expect("response");
+    assert_eq!(response.status(), StatusCode::OK, "passive: no 429 renders");
+}
+
+#[tokio::test]
+async fn event_bus_receives_the_rate_limited_event_through_the_router() {
+    let events: Arc<std::sync::Mutex<Vec<guard_core_rs::events::SecurityEvent>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = Arc::clone(&events);
+    let bus = Arc::new(SecurityEventBus::new(true).on_event(Arc::new(move |event| {
+        sink.lock().expect("events").push(event.clone());
+    })));
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config())
+                .with_rate_limiting(limiter(1, false))
+                .with_event_bus(bus),
+        );
+    let response = app
+        .clone()
+        .oneshot(attributed("/hello"))
+        .await
+        .expect("response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app.oneshot(attributed("/hello")).await.expect("response");
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    let events = events.lock().expect("events");
+    assert!(
+        events.iter().any(|event| event.event_type == "rate_limited"
+            && event.action_taken == "request_blocked"
+            && event.handler_name.as_deref() == Some("rate_limit")),
+        "the rate_limited event fired"
+    );
+}
+
+/// A distributed store that always fails (the backend is down).
+struct DownStore;
+
+impl SlidingWindowStore for DownStore {
+    fn record_hit(
+        &self,
+        _key: &str,
+        _now: f64,
+        _window: u64,
+    ) -> Result<u64, guard_core_engine::distributed::StoreError> {
+        Err(guard_core_engine::distributed::StoreError(String::new()))
+    }
+}
+
+#[tokio::test]
+async fn distributed_store_fail_closed_answers_the_503_shape() {
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config())
+                .with_rate_limiting(limiter(10, false))
+                .with_distributed_store(
+                    Arc::new(DownStore) as Arc<dyn SlidingWindowStore>,
+                    "guard_core:",
+                    false,
+                ),
+        );
+    let response = app.oneshot(attributed("/hello")).await.expect("response");
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body_text(response).await, "Redis rate limiting unavailable");
+}
+
+#[tokio::test]
+async fn custom_error_responses_reach_the_banned_shape_through_the_router() {
+    let manager = IpBanManager::new();
+    let config = IpBanConfig::new(true, 10, 3600, no_entries()).expect("valid config");
+    let app = Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(
+            with_guard(default_config())
+                .with_ip_banning(manager.clone(), config)
+                .with_custom_error_responses(
+                    [(403u16, "denied:custom".to_owned())].into_iter().collect(),
+                ),
+        );
+    manager
+        .ban_ip(
+            std::net::IpAddr::from_str("192.0.2.90").expect("ip"),
+            60,
+            "operator",
+        )
+        .expect("ban");
+    let response = app.oneshot(attributed("/hello")).await.expect("response");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(body_text(response).await, "denied:custom");
 }

@@ -56,6 +56,23 @@
 //! stay detection-screened. Cloning the layer shares the one limiter and ban
 //! store: they are process-global by design.
 //!
+//! ## The 4.2.0 wave surfaces (re-exported, axum-shaped)
+//!
+//! Every wave surface configurable on [`GuardLayer`] is reachable through
+//! `with_guard`'s return value, so an axum application turns each one on
+//! with a chain before [`Router::layer`](axum::Router::layer):
+//! route/geo rate-limit tiers ([`GuardLayer::with_route_tiers`] with a
+//! [`RouteRateLimits`] request extension winning, [`GuardLayer::with_geo_handler`]),
+//! per-route detection exclusions ([`GuardLayer::with_detection_exclusions`]
+//! plus the [`RouteDetectionExclusions`] request extension), the event bus
+//! and observability knobs ([`GuardLayer::with_event_bus`],
+//! [`GuardLayer::with_observability`]), `on_block` + custom error bodies
+//! ([`GuardLayer::with_on_block`], [`GuardLayer::with_custom_error_responses`]),
+//! the distributed stores ([`GuardLayer::with_distributed_store`] +
+//! [`GuardLayer::with_distributed_ban_store`]), and passive mode
+//! ([`GuardLayer::with_passive_mode`]). The axum tests pin each surface end
+//! to end through a `Router`.
+
 //! # Example
 //!
 //! ```
@@ -128,12 +145,15 @@
 //! ```
 
 pub use tower_guard_rs::{
-    ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord, BoxError, Clock,
-    DetectConfig, DetectVerdict, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GuardBody, GuardClientIp,
-    GuardLayer, GuardService, IpBanConfig, IpBanConfigError, IpBanManager, IpGateConfig,
-    IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict, OVERSIZE_MESSAGE,
-    RATE_LIMITED_MESSAGE, RateLimitConfig, RateLimitConfigError, RateLimitDecision, RateLimiter,
-    ResolvedBan, Threat, ThreatBanEntry, ViolationCounters, default_config,
+    ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord, BanStore,
+    BlockPayload, BoxError, Clock, CustomErrorResponses, DetectConfig, DetectVerdict,
+    DetectionExclusionConfig, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GeoIpHandler, GuardBody,
+    GuardClientIp, GuardLayer, GuardService, IpBanConfig, IpBanConfigError, IpBanManager,
+    IpGateConfig, IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict, OVERSIZE_MESSAGE,
+    ObservabilityConfig, OnBlockHook, RATE_LIMITED_MESSAGE, RateLimitConfig, RateLimitConfigError,
+    RateLimitDecision, RateLimitEntry, RateLimitTier, RateLimiter, RequestObservation, ResolvedBan,
+    RouteDetectionExclusions, RouteRateLimits, SecurityEventBus, SlidingWindowStore, StageResponse,
+    Threat, ThreatBanEntry, TierDecision, ViolationCounters, default_config,
 };
 
 use axum::extract::connect_info::ConnectInfo;
