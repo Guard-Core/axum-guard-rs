@@ -48,6 +48,21 @@ One engine call per request view, mirroring the mapping used by the sibling Type
 
 The HTTP method is not fed to the engine: the engine's `detect(content, context, config)` takes content plus a context, and the reference adapters do not scan the method either.
 
+## Engine surfaces (public config)
+
+Every surface configurable on the tower `GuardLayer` is reachable through `with_guard`'s return value:
+
+| Surface | Builder |
+|---|---|
+| Rate-limit tiers | `.with_route_tiers(resolver)` (`path -> Option<RouteRateLimits>`; a `RouteRateLimits` request extension wins), `.with_geo_handler(handler)` |
+| Detection exclusions | `.with_detection_exclusions(config)`; per route via a `RouteDetectionExclusions` request extension |
+| Events + log settings | `.with_event_bus(bus)`, `.with_observability(config)` |
+| `on_block` + custom errors | `.with_on_block(hook)`, `.with_custom_error_responses(map)` |
+| Distributed mode | `.with_distributed_store(window_store, prefix, fail_open)` + `.with_distributed_ban_store(ban_store)` |
+| Passive mode | `.with_passive_mode(true)` |
+
+All of the types (`RouteRateLimits`, `DetectionExclusionConfig`, `SecurityEventBus`, `ObservabilityConfig`, `OnBlockHook`, `CustomErrorResponses`, the store traits, and more) are re-exported at the crate root.
+
 ## Responses
 
 | Situation | Status | Body |

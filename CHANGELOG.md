@@ -6,6 +6,17 @@ All notable changes to this project.
 
 ### Added
 
+- The wave engine surfaces are reachable through `with_guard`'s `GuardLayer` (the tower reference implementation's builders, re-exported types included): route/geo rate-limit tiers (`with_route_tiers` + the `RouteRateLimits` request extension, `with_geo_handler`), per-route detection exclusions (`with_detection_exclusions` + the `RouteDetectionExclusions` request extension), the event bus and observability knobs (`with_event_bus`, `with_observability`), `on_block` + custom error bodies (`with_on_block`, `with_custom_error_responses`), the distributed stores (`with_distributed_store` + `with_distributed_ban_store`), and passive mode (`with_passive_mode`). New re-exports: `DetectionExclusionConfig`, `RouteDetectionExclusions`, `GeoIpHandler`, `BanStore`, `SlidingWindowStore`, `RouteRateLimits`, `RateLimitEntry`, `RateLimitTier`, `TierDecision`, `SecurityEventBus`, `ObservabilityConfig`, `RequestObservation`, `StageResponse`, `BlockPayload`, `OnBlockHook`, `CustomErrorResponses`
+- axum-specific integration tests pin each surface end to end through a `Router` (`Router::layer` + `oneshot`)
+
+### Changed
+
+- `tower-guard-rs` (and through it the `guard-core-rs` facade and `guard-core-engine` engine) remains the single engine dependency; the axum adapter gains no logic of its own, only the re-export surface and the axum-shaped tests
+- Exempt IPs now feed the violation counters (the reference suspicious-activity stage skips a whitelisted IP only; detection still scans and blocks them), so a crossed threshold bans even an exempt attacker - the tower reference's updated contract, pinned by an axum test
+
+
+### Added
+
 - The stateful stage from `tower-guard-rs` (rate limiting, dynamic bans, auto-ban), exposed for axum with no new code: `with_guard(detect_config).with_rate_limiting(RateLimiter)` answers a sliding-window crossing with `429 Too Many Requests` carrying `Retry-After: <window seconds>`, and `with_ip_banning(IpBanManager, IpBanConfig)` answers a live ban with `403 Forbidden` (`IP address banned`) before the limiter (banned traffic never consumes rate budget), counts every detected threat's categories per client IP, and bans on the spot with `403 Forbidden` (`IP has been banned`) when a `threat_ban_config` entry or the flat `auto_ban_threshold` crosses. With the limiter's `enable_rate_limit_auto_ban` on, every crossing counts one `rate_limit` violation (the response stays 429, the ban bites the next request); with `enable_ip_banning = false` violations count but never ban. Both stages honor the `exempt_ips` contract (whitelisted and exempt IPs are never rate limited, never banned, never counted) and unattributed requests (no `client_ip_layer()`) skip the stage but stay detection-screened
 - Re-exports for the stateful surface (`RateLimiter`, `RateLimitConfig`, `RateLimitConfigError`, `RateLimitDecision`, `IpBanManager`, `IpBanConfig`, `IpBanConfigError`, `BanRecord`, `BanError`, `ResolvedBan`, `ThreatBanEntry`, `ViolationCounters`, `Clock`, `BANNED_MESSAGE`, `ACTIVITY_BANNED_MESSAGE`, `RATE_LIMITED_MESSAGE`)
 - An axum-level stateful-stage test suite in `tests/axum.rs` (crossing shape with `Retry-After`, exempt IP under load, live ban before detection and the limiter, ban expiry via a fake clock, category-threshold and rate-limit auto-ban, disabled banning, unattributed skip), mirroring the tower reference suite
