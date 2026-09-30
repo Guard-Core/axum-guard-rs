@@ -24,7 +24,7 @@ jobs:
       contents: read
     steps:
       - name: Check out the repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -39,7 +39,7 @@ jobs:
       # track master again (same dance as the earlier
       # fix/plain-text-block-responses pin).
       - name: Checkout tower-guard-rs (path dependency)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/tower-guard-rs
           ref: master
@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout guard-core-rs (transitive path dependency)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-rs
           ref: master
@@ -84,12 +84,12 @@ jobs:
       contents: read
     steps:
       - name: Check out the repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Checkout tower-guard-rs (path dependency)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/tower-guard-rs
           ref: master
@@ -97,7 +97,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout guard-core-rs (transitive path dependency)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-rs
           ref: master
@@ -129,13 +129,13 @@ jobs:
       contents: read
     steps:
       - name: Check out the repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       # Moving branches, same tradeoff as the stable job above.
       - name: Checkout tower-guard-rs (path dependency)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Merged as rennf93/tower-guard-rs#13; tracks master.
           repository: rennf93/tower-guard-rs
@@ -144,7 +144,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout guard-core-rs (transitive path dependency)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Merged as rennf93/guard-core-rs#22; tracks master.
           repository: rennf93/guard-core-rs
