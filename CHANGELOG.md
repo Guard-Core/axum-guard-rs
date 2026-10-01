@@ -2,6 +2,18 @@
 
 All notable changes to this project.
 
+## [Unreleased]
+
+## [1.3.0] - 2026-10-01
+
+### Note
+
+- Trains with the engine: the `tower-guard-rs` floor moves to 1.3.0 (and through it the `guard-core-engine` and `guard-core-rs` floors to 4.3.0, the safety-chain release). The adapter ships no logic changes of its own
+
+### Changed
+
+- Process and CI chores: the community and security process scaffold plus the sync-labels checkout pin and the cargo audit step (#22), the 100% line coverage gate enforced with cargo-llvm-cov (#23), the CDLA-Permissive-2.0 license allowed from the engine sibling's graph (#32), and the routine GitHub Actions dependency bumps with the lockfile tracking the engine master graph (#24-#28, #30, #31)
+
 ## [1.2.0] - 2026-09-27
 
 ### Note
