@@ -1002,3 +1002,426 @@ async fn custom_error_responses_reach_the_banned_shape_through_the_router() {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(body_text(response).await, "denied:custom");
 }
+
+// The newly wired stage surface (the reference 17-check pipeline): every
+// test below installs one stage on the guard layer and proves its
+// end-to-end shape through a real axum `Router`.
+
+use axum_guard_rs::{
+    CloudProviderStage, CustomChecksStage, EmergencyModeStage, GeoStage, GuardClientIp,
+    HeadersAuthStage, HttpsEnforcementStage, ResponseProcessor, RouteGuard, UserAgentStage,
+    UserAgentStageConfig, provided_layers,
+};
+use guard_core_engine::behavior::BehaviorTracker;
+use guard_core_engine::cors::CorsConfig;
+use guard_core_engine::custom_checks::{
+    CustomRequestContext as ValidatorContext, CustomResponse, CustomValidatorFn, ValidatorAnswer,
+};
+use guard_core_engine::geo::{GeoIpHandler, parse_country_lists};
+use guard_core_engine::headers_auth::{HeaderAuthRules, REQUIRED_SENTINEL, RequiredHeader};
+use guard_core_engine::security_headers::SecurityHeadersConfig;
+use guard_core_rs::cloud_provider::{
+    CloudIpTable, CloudProviderStageConfig, parse_cloud_selectors,
+};
+use guard_core_rs::emergency_mode::EmergencyModeStageConfig;
+use guard_core_rs::geo::GeoStageConfig;
+use guard_core_rs::https_enforcement::HttpsEnforcementStageConfig;
+use guard_core_rs::route_gates::{GateConfig, ReferrerStage};
+use std::net::IpAddr;
+use std::sync::Mutex as StdMutex;
+
+fn guarded_router(layer: axum_guard_rs::GuardLayer) -> Router {
+    Router::new()
+        .route("/hello", get(|| async { "hello" }))
+        .layer(layer)
+}
+
+async fn send(router: &Router, request: Request<Body>) -> (StatusCode, String) {
+    let response = router
+        .clone()
+        .oneshot(request)
+        .await
+        .expect("infallible service");
+    let status = response.status();
+    let body = String::from_utf8_lossy(
+        &response
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes(),
+    )
+    .into_owned();
+    (status, body)
+}
+
+fn attributed_to(path: &str, ip: &str) -> Request<Body> {
+    Request::builder()
+        .uri(path)
+        .extension(GuardClientIp(IpAddr::from_str(ip).expect("test ip")))
+        .body(Body::empty())
+        .expect("request")
+}
+
+struct UnitedStates;
+
+impl GeoIpHandler for UnitedStates {
+    fn get_country(&self, ip: IpAddr) -> Option<String> {
+        (ip.to_string() == "192.0.2.9").then(|| String::from("US"))
+    }
+}
+
+#[tokio::test]
+async fn emergency_mode_blocks_outside_the_whitelist_and_fails_secure_without_an_ip() {
+    let stage = EmergencyModeStage::builder(EmergencyModeStageConfig::default())
+        .emergency_mode(true)
+        .emergency_whitelist(["203.0.113.9"])
+        .build()
+        .expect("valid whitelist");
+    let router = guarded_router(with_guard(default_config()).with_emergency_mode(stage));
+
+    let (status, body) = send(&router, attributed_to("/hello", "192.0.2.7")).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(body, "Service temporarily unavailable");
+
+    let (status, _) = send(&router, attributed_to("/hello", "203.0.113.9")).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Fail secure: an unattributable request is outside the whitelist.
+    let (status, _) = send(
+        &router,
+        Request::builder()
+            .uri("/hello")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn https_enforcement_redirects_plain_http_through_the_router() {
+    let stage = HttpsEnforcementStage::builder(HttpsEnforcementStageConfig::default())
+        .enforce_https(true)
+        .build()
+        .expect("valid");
+    let router = guarded_router(with_guard(default_config()).with_https_enforcement(stage));
+
+    let request = Request::builder()
+        .uri("/hello?token=1")
+        .header("host", "guard.example")
+        .body(Body::empty())
+        .unwrap();
+    let (status, _) = send(&router, request).await;
+    assert_eq!(status, StatusCode::MOVED_PERMANENTLY);
+}
+
+#[tokio::test]
+async fn required_headers_and_authentication_answer_the_reference_shapes() {
+    let stage = HeadersAuthStage::new(
+        None,
+        Arc::new(|path: &str| {
+            (path == "/hello").then(|| {
+                Arc::new(RouteGuard {
+                    rules: HeaderAuthRules {
+                        required_headers: vec![RequiredHeader {
+                            name: String::from("x-api-key"),
+                            expected: String::from(REQUIRED_SENTINEL),
+                        }],
+                        auth_required: Some(String::from("bearer")),
+                        ..HeaderAuthRules::default()
+                    },
+                    verifier: Some(Arc::new(|credential: &str| credential == "let-me-in")),
+                    api_key_verifier: None,
+                })
+            })
+        }),
+    );
+    let router = guarded_router(with_guard(default_config()).with_headers_auth(stage));
+
+    let (status, _) = send(
+        &router,
+        Request::builder()
+            .uri("/hello")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("x-api-key", "present")
+        .header("authorization", "Bearer nope")
+        .body(Body::empty())
+        .unwrap();
+    let (status, body) = send(&router, request).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body, "Authentication required");
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("x-api-key", "present")
+        .header("authorization", "Bearer let-me-in")
+        .body(Body::empty())
+        .unwrap();
+    let (status, _) = send(&router, request).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn referrer_gate_blocks_a_missing_or_foreign_referrer() {
+    let stage = ReferrerStage::builder(GateConfig::default())
+        .resolver(Arc::new(|path: &str| {
+            (path == "/hello").then(|| vec![String::from("https://good.example")])
+        }))
+        .build();
+    let router = guarded_router(with_guard(default_config()).with_referrer_gate(stage));
+
+    let (status, body) = send(
+        &router,
+        Request::builder()
+            .uri("/hello")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "Referrer required");
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("referer", "https://good.example/page")
+        .body(Body::empty())
+        .unwrap();
+    let (status, _) = send(&router, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("referer", "https://evil.example/page")
+        .body(Body::empty())
+        .unwrap();
+    let (status, body) = send(&router, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "Invalid referrer");
+}
+
+#[tokio::test]
+async fn custom_validators_block_with_the_validator_response() {
+    let stage = CustomChecksStage::builder()
+        .validators_resolver(Arc::new(|path: &str| {
+            (path == "/hello").then(|| {
+                vec![(
+                    String::from("post_only"),
+                    Arc::new(|_ctx: &ValidatorContext<'_>| {
+                        Some(ValidatorAnswer::Response(CustomResponse {
+                            status: Some(403),
+                        }))
+                    }) as CustomValidatorFn,
+                )]
+            })
+        }))
+        .build();
+    let router = guarded_router(with_guard(default_config()).with_custom_checks(stage));
+
+    let (status, _) = send(
+        &router,
+        Request::builder()
+            .uri("/hello")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn time_window_gate_blocks_outside_the_window() {
+    let now = chrono::Utc::now();
+    let start = (now + chrono::Duration::minutes(2))
+        .format("%H:%M")
+        .to_string();
+    let end = (now + chrono::Duration::minutes(3))
+        .format("%H:%M")
+        .to_string();
+    let stage = axum_guard_rs::TimeWindowStage::builder(GateConfig::default())
+        .resolver(Arc::new(move |path: &str| {
+            (path == "/hello").then(|| guard_core_engine::time_window::TimeWindow {
+                start: Some(start.clone()),
+                end: Some(end.clone()),
+                timezone: Some(String::from("UTC")),
+            })
+        }))
+        .build();
+    let router = guarded_router(with_guard(default_config()).with_time_window_gate(stage));
+
+    let (status, body) = send(
+        &router,
+        Request::builder()
+            .uri("/hello")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "Access not allowed at this time");
+}
+
+#[tokio::test]
+async fn cloud_provider_blocking_answers_the_reference_403() {
+    let table = CloudIpTable::default();
+    table
+        .set_provider_ranges("AWS", vec![(String::from("192.0.2.0/24"), None)])
+        .expect("valid ranges");
+    let stage = CloudProviderStage::new(CloudProviderStageConfig {
+        block_cloud_providers: parse_cloud_selectors(["AWS"]).expect("valid selectors"),
+        table,
+        passive_mode: false,
+    });
+    let router = guarded_router(with_guard(default_config()).with_cloud_provider(stage));
+
+    let (status, body) = send(&router, attributed_to("/hello", "192.0.2.9")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "Cloud provider IP not allowed");
+
+    let (status, _) = send(&router, attributed_to("/hello", "198.51.100.9")).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn geo_country_blocking_answers_the_reference_403() {
+    let stage = GeoStage::new(GeoStageConfig {
+        gate: parse_country_lists(Vec::<String>::new(), ["US"]),
+        handler: Some(Arc::new(UnitedStates)),
+        passive_mode: false,
+    });
+    let router = guarded_router(with_guard(default_config()).with_geo_blocking(stage));
+
+    let (status, body) = send(&router, attributed_to("/hello", "192.0.2.9")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "Forbidden");
+
+    let (status, _) = send(&router, attributed_to("/hello", "198.51.100.9")).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn user_agent_blocking_answers_the_reference_403() {
+    let stage = UserAgentStage::new(UserAgentStageConfig {
+        blocked_user_agents: guard_core_rs::user_agent::UserAgentFilter::new(["bad-bot"])
+            .expect("valid patterns"),
+        ..UserAgentStageConfig::default()
+    })
+    .expect("valid config");
+    let router = guarded_router(with_guard(default_config()).with_user_agent(stage));
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("user-agent", "bad-bot/1.0")
+        .body(Body::empty())
+        .unwrap();
+    let (status, body) = send(&router, request).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "User-Agent not allowed");
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("user-agent", "friendly-crawler/2.0")
+        .body(Body::empty())
+        .unwrap();
+    let (status, _) = send(&router, request).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn custom_request_blocks_with_the_function_response() {
+    let stage = CustomChecksStage::builder()
+        .custom_request(
+            "maintenance_gate",
+            Arc::new(|ctx: &ValidatorContext<'_>| {
+                (ctx.path == "/hello").then_some(CustomResponse { status: Some(503) })
+            }),
+        )
+        .build();
+    let router = guarded_router(with_guard(default_config()).with_custom_checks(stage));
+
+    let (status, _) = send(
+        &router,
+        Request::builder()
+            .uri("/hello")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn response_processor_renders_security_headers_and_cors_on_every_response() {
+    let processor = ResponseProcessor::new(
+        Some(SecurityHeadersConfig::reference_default()),
+        Some(CorsConfig {
+            enabled: true,
+            allow_origins: vec![String::from("https://app.example.com")],
+            ..CorsConfig::default()
+        }),
+        Vec::new(),
+        Arc::new(StdMutex::new(BehaviorTracker::new())),
+        IpBanManager::new(),
+        true,
+        262_144,
+        false,
+    );
+    let router = guarded_router(with_guard(default_config()).with_response_processor(processor));
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("origin", "https://app.example.com")
+        .body(Body::empty())
+        .unwrap();
+    let (status, _) = send(&router, request).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = Request::builder()
+        .uri("/hello")
+        .header("origin", "https://app.example.com")
+        .body(Body::empty())
+        .unwrap();
+    let response = router.clone().oneshot(request).await.unwrap();
+    assert_eq!(
+        response
+            .headers()
+            .get("x-content-type-options")
+            .expect("nosniff"),
+        "nosniff"
+    );
+    assert_eq!(
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .expect("cors"),
+        "https://app.example.com"
+    );
+}
+
+#[tokio::test]
+async fn provided_layers_lists_the_installed_stages_in_reference_order() {
+    let emergency = EmergencyModeStage::builder(EmergencyModeStageConfig::default())
+        .build()
+        .expect("valid");
+    let layer = with_guard(default_config())
+        .with_emergency_mode(emergency)
+        .with_user_agent(
+            UserAgentStage::new(UserAgentStageConfig::default()).expect("valid config"),
+        );
+    let layers = provided_layers(&layer);
+    assert!(matches!(
+        layers.first(),
+        Some(axum_guard_rs::GuardStageLayer::Emergency(_))
+    ));
+    assert!(matches!(
+        layers.last(),
+        Some(axum_guard_rs::GuardStageLayer::UserAgent(_))
+    ));
+}
