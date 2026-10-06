@@ -18,6 +18,13 @@ name = "axum_guard_rs"
 
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+# guard-core-engine is published to crates.io (4.3.0); the path points at the
+# engine crate inside a sibling guard-core-rs checkout so local builds and CI
+# (see .github/workflows/ci.yml) exercise the engine from source. The version
+# pin stays in lockstep with the published engine release. The websocket
+# guard module runs the reference upgrade sequence directly on the engine
+# primitives (the sibling `tower-guard-rs` wraps the HTTP request path).
+guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine", version = "4.3.0" }
 # tower-guard-rs 1.3.0 is published to crates.io (itself pinned to
 # guard-core-engine 4.3.0); the path points at a sibling tower-guard-rs
 # checkout so local builds and CI (see .github/workflows/ci.yml) exercise the
@@ -30,7 +37,9 @@ tower = { version = "0.5", default-features = false }
 
 [dev-dependencies]
 bytes = "1.10"
-guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine", version = "4.3.0" }
+# guard-core-rs stays a dev dependency: the runtime surfaces this crate
+# re-exports all come from `tower-guard-rs`, and the websocket guard runs
+# the engine primitives through the direct dependency above.
 guard-core-rs = { path = "../guard-core-rs/crates/guard-core-rs", version = "4.3.0" }
 http = "1.3"
 http-body-util = "0.1"
