@@ -470,9 +470,9 @@ pub fn close_response(reason: WebSocketCloseReason) -> Response {
 ///
 /// ```
 /// use axum::Router;
-/// use axum_guard_rs::{default_config, websocket::WebSocketGuard, websocket::WebSocketGuardConfig};
+/// use axum_guard_rs::{default_config, websocket::websocket_guard, websocket::WebSocketGuardConfig};
 ///
-/// let app: Router = Router::new().layer(WebSocketGuard::new(WebSocketGuardConfig::new(
+/// let app: Router = Router::new().layer(websocket_guard(WebSocketGuardConfig::new(
 ///     default_config(),
 /// )));
 /// # let _ = app;
@@ -564,6 +564,13 @@ mod tests {
 
     fn detect_config() -> DetectConfig {
         crate::default_config()
+    }
+
+    /// The route handler the clean and blocked upgrade tests share: one fn
+    /// item, one routing instantiation, exercised by the clean test (the
+    /// blocked test's handshake is rejected before dispatch).
+    async fn upgraded() -> &'static str {
+        "upgraded"
     }
 
     #[test]
@@ -667,7 +674,7 @@ mod tests {
                 (String::from("bad"), String::from("%zz")),
             ]
         );
-        assert!(parse_query_pairs("").is_empty());
+        assert_eq!(parse_query_pairs(""), Vec::<(String, String)>::new());
         assert_eq!(decode_component("caf%C3%A9"), "café");
     }
 
@@ -844,6 +851,56 @@ mod tests {
         );
     }
 
+    #[test]
+    fn debug_prints_the_config_shape() {
+        let config = WebSocketGuardConfig::new(detect_config()).with_fail_secure(true);
+        let printed = format!("{config:?}");
+        assert!(
+            printed.starts_with("WebSocketGuardConfig"),
+            "the debug shape names the config: {printed}"
+        );
+        assert!(printed.contains("fail_secure: true"), "{printed}");
+    }
+
+    #[test]
+    fn detection_exclusions_shape_the_scan_arm() {
+        let exclusions = DetectionExclusionConfig {
+            excluded_detection_params: vec!["secret".to_owned()],
+            ..DetectionExclusionConfig::default()
+        };
+        let config =
+            WebSocketGuardConfig::new(detect_config()).with_detection_exclusions(&exclusions);
+        let ip: IpAddr = "203.0.113.9".parse().expect("ip");
+        // The excluded param name skips the scan entirely.
+        assert_eq!(
+            run_websocket_checks(
+                &config,
+                Some(ip),
+                "/ws",
+                &[(
+                    "secret".to_owned(),
+                    String::from("<script>alert(1)</script>")
+                )],
+                &[],
+            ),
+            Ok(())
+        );
+        // Any other name scans.
+        assert_eq!(
+            run_websocket_checks(
+                &config,
+                Some(ip),
+                "/ws",
+                &[(
+                    "public".to_owned(),
+                    String::from("<script>alert(1)</script>")
+                )],
+                &[],
+            ),
+            Err(WS_CLOSE_SUSPICIOUS_ACTIVITY)
+        );
+    }
+
     struct PanickingCountry;
 
     impl GeoIpHandler for PanickingCountry {
@@ -888,16 +945,14 @@ mod tests {
         );
     }
 
-    fn upgrade_request(ip: Option<std::net::SocketAddr>) -> Request {
+    fn upgrade_request(addr: std::net::SocketAddr) -> Request {
         let mut request = Request::builder()
             .uri("/ws")
             .header("Upgrade", "websocket")
             .header("Connection", "Upgrade")
             .body(Body::empty())
             .expect("request");
-        if let Some(ip) = ip {
-            request.extensions_mut().insert(ConnectInfo(ip));
-        }
+        request.extensions_mut().insert(ConnectInfo(addr));
         request
     }
 
@@ -908,9 +963,9 @@ mod tests {
         manager.ban_ip(ip, 60, "test ban").expect("ban");
         let config = WebSocketGuardConfig::new(detect_config()).with_ip_banning(manager);
         let app: Router = Router::new()
-            .route("/ws", get(|| async { "upgraded" }))
-            .layer(WebSocketGuard::new(config));
-        let request = upgrade_request(Some("203.0.113.9:41000".parse().expect("addr")));
+            .route("/ws", get(upgraded))
+            .layer(websocket_guard(config));
+        let request = upgrade_request("203.0.113.9:41000".parse().expect("addr"));
         let response = app.oneshot(request).await.expect("response");
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
         assert_eq!(
@@ -941,9 +996,9 @@ mod tests {
             .expect("valid config"),
         );
         let app: Router = Router::new()
-            .route("/ws", get(|| async { "upgraded" }))
+            .route("/ws", get(upgraded))
             .layer(WebSocketGuard::new(config));
-        let request = upgrade_request(Some("203.0.113.7:41000".parse().expect("addr")));
+        let request = upgrade_request("203.0.113.7:41000".parse().expect("addr"));
         let response = app.oneshot(request).await.expect("response");
         assert_eq!(response.status(), StatusCode::OK);
     }
