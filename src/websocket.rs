@@ -30,7 +30,7 @@
 //! [`WS_1013_TRY_AGAIN_LATER`] ([`WS_CLOSE_SECURITY_CHECK_FAILED`]). The
 //! engine primitives the sequence runs on are infallible, so the 1013 shape
 //! is reachable through exactly the reference's remaining arm: the check
-//! machinery panicking mid-handshake, which [`WebSocketGuardLayer`]
+//! machinery panicking mid-handshake, which [`WebSocketGuard`]
 //! contains.
 //!
 //! The client IP resolves through the [`GuardClientIp`] extension
@@ -509,7 +509,7 @@ pub fn websocket_guard(config: WebSocketGuardConfig) -> WebSocketGuard {
     WebSocketGuard::new(config)
 }
 
-/// The [`tower::Service`](tower::Service) produced by
+/// The [`tower::Service`] produced by
 /// [`WebSocketGuard::layer`]. `Clone` (axum's `Router::layer` requires it):
 /// clones share the one config through its `Arc`.
 #[derive(Clone)]
