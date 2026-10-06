@@ -42,7 +42,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/tower-guard-rs
-          ref: master
+          # TEMPORARY pin: the stage composition wired in this branch ships on
+          # feat/wire-full-stage-pipeline; revert to master once that PR merges.
+          ref: feat/wire-full-stage-pipeline
           path: tower-checkout
           persist-credentials: false
 
@@ -50,7 +52,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-rs
-          ref: master
+          # TEMPORARY pin: the stage surface wired in this branch ships on
+          # feat/full-stage-parity; revert to master once guard-core-rs#78 merges.
+          ref: feat/full-stage-parity
           path: core-checkout
           persist-credentials: false
 
@@ -92,7 +96,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/tower-guard-rs
-          ref: master
+          # TEMPORARY pin: the stage composition wired in this branch ships on
+          # feat/wire-full-stage-pipeline; revert to master once that PR merges.
+          ref: feat/wire-full-stage-pipeline
           path: tower-checkout
           persist-credentials: false
 
@@ -100,7 +106,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/guard-core-rs
-          ref: master
+          # TEMPORARY pin: the stage surface wired in this branch ships on
+          # feat/full-stage-parity; revert to master once guard-core-rs#78 merges.
+          ref: feat/full-stage-parity
           path: core-checkout
           persist-credentials: false
 
@@ -139,7 +147,9 @@ jobs:
         with:
           # Merged as rennf93/tower-guard-rs#13; tracks master.
           repository: rennf93/tower-guard-rs
-          ref: master
+          # TEMPORARY pin: the stage composition wired in this branch ships on
+          # feat/wire-full-stage-pipeline; revert to master once that PR merges.
+          ref: feat/wire-full-stage-pipeline
           path: tower-checkout
           persist-credentials: false
 
@@ -148,7 +158,9 @@ jobs:
         with:
           # Merged as rennf93/guard-core-rs#22; tracks master.
           repository: rennf93/guard-core-rs
-          ref: master
+          # TEMPORARY pin: the stage surface wired in this branch ships on
+          # feat/full-stage-parity; revert to master once guard-core-rs#78 merges.
+          ref: feat/full-stage-parity
           path: core-checkout
           persist-credentials: false
 

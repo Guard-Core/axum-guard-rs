@@ -119,6 +119,15 @@ CI checks out both sibling repositories (see [`.github/workflows/ci.yml`](.githu
 
 The engine crate is used directly for the detect path; the `guard-core-rs` facade is also a dependency (its `events` module backs the `SecurityEventBus` re-exports and the test assertions). The facade re-exports the full engine stage set (`compiler`, `preprocessor`, `semantic`, `detect`, `detection_exclusions`), so nothing is blocked on the facade.
 
+## Stage surface (the reference 17-check pipeline, wired)
+
+Every reference check the engine ships is installable on the `GuardLayer` `with_guard` returns, and the service runs the installed set in the reference pipeline order (`provided_layers` hands the same stages back as standalone tower layers in that order): emergency mode, HTTPS enforcement, request logging, request size/content caps, required headers + authentication, referrer, custom validators, time windows, geo country blocking, cloud-provider blocking, user-agent filtering, bans, rate limiting, the custom-request check, and the response-side pass (behavioral return rules + security headers + CORS). The builder table lives in the crate docs; the composition ships in `tower-guard-rs`.
+
+## Not wired on purpose
+
+- **WebSocket guard**: an axum `Router` sees a WebSocket upgrade as an ordinary request, so the handshake is screened like any request; frames after the upgrade are not intercepted. There is no per-frame guard surface.
+- **Status route**: no `add_status_route` equivalent ships (a gap tracked family-wide); expose engine state through your own route if you need it.
+
 ## Development
 
 - MSRV: 1.92 (matches guard-core-rs); edition 2024
