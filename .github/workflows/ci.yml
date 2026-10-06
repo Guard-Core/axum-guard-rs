@@ -42,7 +42,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/tower-guard-rs
-          ref: master
+          # TEMPORARY pin: the stage composition wired in this branch ships
+          # on feat/wire-full-stage-pipeline; revert to master once that PR
+          # merges.
+          ref: feat/wire-full-stage-pipeline
           path: tower-checkout
           persist-credentials: false
 
@@ -94,7 +97,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: rennf93/tower-guard-rs
-          ref: master
+          # TEMPORARY pin: the stage composition wired in this branch ships
+          # on feat/wire-full-stage-pipeline; revert to master once that PR
+          # merges.
+          ref: feat/wire-full-stage-pipeline
           path: tower-checkout
           persist-credentials: false
 
@@ -125,6 +131,11 @@ jobs:
         run: cargo build -p guard-core-engine --bins
 
       - name: Enforce 100% line coverage
+        env:
+          # cargo-llvm-cov compiles into its own target directory, so the
+          # test binaries' sibling search cannot see the probe; the env
+          # override pins the default-target-dir copy built one step above.
+          GUARD_PATTERN_PROBE_BIN: target/debug/guard-pattern-probe
         run: cargo llvm-cov --fail-under-lines 100
 
   msrv:
@@ -144,7 +155,10 @@ jobs:
         with:
           # Merged as rennf93/tower-guard-rs#13; tracks master.
           repository: rennf93/tower-guard-rs
-          ref: master
+          # TEMPORARY pin: the stage composition wired in this branch ships
+          # on feat/wire-full-stage-pipeline; revert to master once that PR
+          # merges.
+          ref: feat/wire-full-stage-pipeline
           path: tower-checkout
           persist-credentials: false
 
