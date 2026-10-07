@@ -170,18 +170,19 @@
 
 pub use tower_guard_rs::{
     ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord, BanStore,
-    BlockPayload, BoxError, Clock, CloudDecision, CloudProviderStage, CorsConfig,
-    CustomChecksStage, CustomErrorResponses, DetectConfig, DetectVerdict, DetectionExclusionConfig,
-    EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GateAnswer,
-    GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody, GuardClientIp, GuardLayer,
-    GuardService, GuardStageLayer, GuardStageService, HeaderAuthRules, HeadersAuthAnswer,
-    HeadersAuthStage, HttpsEnforcementStage, HttpsRedirect, IpBanConfig, IpBanConfigError,
-    IpBanManager, IpGateConfig, IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict,
-    OVERSIZE_MESSAGE, ObservabilityConfig, OnBlockHook, RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL,
-    RateLimitConfig, RateLimitConfigError, RateLimitDecision, RateLimitEntry, RateLimitStage,
-    RateLimitStageConfig, RateLimitTier, RateLimiter, RequestLoggingStage,
-    RequestLoggingStageConfig, RequestObservation, RequiredHeader, ResolvedBan, ResponseProcessor,
-    RouteDetectionExclusions, RouteGuard, RouteRateLimits, RouteRateResolver, SecurityEventBus,
+    BlockPayload, BoxError, BufferOverflowPolicy, Clock, CloudDecision, CloudProviderStage,
+    CorsConfig, CustomChecksStage, CustomErrorResponses, DetectConfig, DetectVerdict,
+    DetectionExclusionConfig, EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE,
+    FORBIDDEN_MESSAGE, GateAnswer, GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody,
+    GuardClientIp, GuardConfigError, GuardLayer, GuardService, GuardStageLayer, GuardStageService,
+    HeaderAuthRules, HeadersAuthAnswer, HeadersAuthStage, HttpsEnforcementStage, HttpsRedirect,
+    IpBanConfig, IpBanConfigError, IpBanManager, IpGateConfig, IpGateDecision, IpGateDenial,
+    IpGateError, IpGateVerdict, LogFormat, LogLevel, OVERSIZE_MESSAGE, ObservabilityConfig,
+    OnBlockHook, RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL, RateLimitConfig, RateLimitConfigError,
+    RateLimitDecision, RateLimitEntry, RateLimitStage, RateLimitStageConfig, RateLimitTier,
+    RateLimiter, RequestLoggingStage, RequestLoggingStageConfig, RequestObservation,
+    RequiredHeader, ResolvedBan, ResponseProcessor, RouteDetectionExclusions, RouteGuard,
+    RouteRateLimits, RouteRateResolver, SecurityConfig, SecurityConfigError, SecurityEventBus,
     SecurityHeadersConfig, SlidingWindowStore, StageResponse, Threat, ThreatBanEntry, TierDecision,
     TimeWindowStage, UserAgentConfigError, UserAgentStage, UserAgentStageConfig, ViolationCounters,
     default_config, provided_layers,
@@ -300,4 +301,45 @@ pub const fn client_ip_layer() -> ClientIpLayer {
 #[must_use]
 pub fn with_guard(config: DetectConfig) -> GuardLayer {
     GuardLayer::new(config)
+}
+
+/// Build the Guard layer from the unified [`SecurityConfig`]
+/// (the reference configuration surface).
+///
+/// This is [`GuardLayer::from_security_config`] under the axum constructor
+/// name, the same one-call consumption the tower adapter ships: every field
+/// the layer consumes maps onto the wired stage or knob it owns (the
+/// detection budgets, the IP lists onto the gate, the rate-limit and ban
+/// groups, `enforce_https` onto the HTTPS stage, `emergency_mode` and its
+/// whitelist, `custom_error_responses`/`on_block`, the detection-exclusion
+/// group, the observability group, the ReDoS-validated
+/// `blocked_user_agents`, and the security-headers/CORS/behavior response
+/// pass), the reference `exclude_paths` carve-out rides along as a
+/// first-class builder, and invalid values fail closed through
+/// [`GuardConfigError`]. Chain further builders (the geo handler, the
+/// distributed stores, the event bus, the per-route resolvers) onto the
+/// return value exactly like [`with_guard`]'s.
+///
+/// # Errors
+///
+/// [`GuardConfigError`] when an engine constructor rejects a value (an
+/// invalid IP/CIDR list entry, a zero rate-limit knob, or a ReDoS-unsafe
+/// blocked user-agent pattern).
+///
+/// # Example
+///
+/// ```
+/// use axum::Router;
+/// use axum_guard_rs::{SecurityConfig, with_security_config};
+///
+/// let config = SecurityConfig {
+///     blacklist: vec![String::from("203.0.113.9")],
+///     ..SecurityConfig::default()
+/// };
+/// let layer = with_security_config(&config).expect("valid config");
+/// let app: Router = Router::new().layer(layer);
+/// # let _ = app;
+/// ```
+pub fn with_security_config(config: &SecurityConfig) -> Result<GuardLayer, GuardConfigError> {
+    GuardLayer::from_security_config(config)
 }
