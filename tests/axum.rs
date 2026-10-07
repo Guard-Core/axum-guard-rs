@@ -1217,6 +1217,7 @@ async fn custom_validators_block_with_the_validator_response() {
                     Arc::new(|_ctx: &ValidatorContext<'_>| {
                         Some(ValidatorAnswer::Response(CustomResponse {
                             status: Some(403),
+                            body: None,
                         }))
                     }) as CustomValidatorFn,
                 )]
@@ -1340,7 +1341,10 @@ async fn custom_request_blocks_with_the_function_response() {
         .custom_request(
             "maintenance_gate",
             Arc::new(|ctx: &ValidatorContext<'_>| {
-                (ctx.path == "/hello").then_some(CustomResponse { status: Some(503) })
+                (ctx.path == "/hello").then_some(CustomResponse {
+                    status: Some(503),
+                    body: None,
+                })
             }),
         )
         .build();

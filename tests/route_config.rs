@@ -63,7 +63,7 @@ async fn the_route_bypass_skips_the_scan_for_its_path_only() {
     let config = RouteConfig {
         bypassed_checks: {
             let mut set = std::collections::BTreeSet::new();
-            set.insert(String::from("suspicious_activity"));
+            set.insert(String::from("penetration"));
             set
         },
         ..RouteConfig::default()
