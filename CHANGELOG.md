@@ -21,6 +21,11 @@ The reference-surface release: the status route and the WebSocket upgrade layer 
 
 ### Added
 
+- The route-config carrier surface (the GAP-R2 axum leg): `RouteConfig` + `RouteConfigResolver` re-exported and `GuardLayer::with_route_configs` reachable from the thin surface - the tower pipeline resolves the route's `RouteConfig` per request ((method, path), an `Arc<RouteConfig>` request extension winning over the resolver) and consumes it with the reference semantics: `bypassed_checks` (+ the `"all"` wildcard) skip the named checks, `require_https` forces the reference `301`, `max_request_size` replaces the route's body cap, `blocked_user_agents` runs additively before the global filter, the rate-limit group becomes the route's tier, and the detection-exclusion group resolves for the route; end-to-end Router twins pin the bypass semantics, the redirect, the tier, the extension precedence, the additive UA list, and the fail-secure invalid tier
+
+
+### Added
+
 - The unified-config consumption (`with_security_config`, the GAP-R1 axum leg): the 129-field `SecurityConfig` (the fieldized reference surface in guard-core-engine) builds the wired pipeline in one call under the axum constructor name - `GuardLayer::from_security_config` re-exported through the thin surface, with `SecurityConfig`, `SecurityConfigError`, `GuardConfigError`, and the `LogLevel`/`LogFormat`/`BufferOverflowPolicy` knob enums re-exported alongside; invalid values fail closed through the typed `GuardConfigError`; the reference `exclude_paths` carve-out and the ip_filter denial behaviors (passive logs-and-forwards, the `on_block` hook with the `ip_security` payload keys, the custom-error body override) ride the same call; end-to-end Router twins pin every consumed group through `oneshot`
 
 ### Changed
