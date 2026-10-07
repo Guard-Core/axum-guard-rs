@@ -187,6 +187,9 @@ pub use tower_guard_rs::{
     default_config, provided_layers,
 };
 
+pub mod status;
+pub mod websocket;
+
 use axum::extract::connect_info::ConnectInfo;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};

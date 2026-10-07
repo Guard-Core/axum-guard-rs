@@ -2,6 +2,21 @@
 
 All notable changes to this project.
 
+v1.4.0 (2026-10-07)
+-------------------
+
+The reference-surface release: the status route and the WebSocket upgrade layer land, training with the 4.3.1 parity-completion engine (v1.4.0)
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+### Note
+
+- Trains with the family: the `tower-guard-rs` floor moves to 1.4.0, and with it the `guard-core-engine` (direct) and `guard-core-rs` (dev) floors move to 4.3.1 (the parity-completion release)
+
+### Added
+
+- The reference status route (fastapi-guard `add_status_route` + `HandlerInitializer.get_initialization_status`): `GuardStatus` + `status_router` mount GET `/_guard/status` serving the cloud-provider readiness table and the geo-ip component from the handles the app already holds (#37)
+- The WebSocket upgrade guard (`WebSocketGuard` layer): the reference upgrade sequence (fail-secure unknown address, `is_ip_banned`, the `is_ip_allowed` gate + country arms, the ws rate limit, the path/query/header penetration scan) runs before the axum handshake, rejecting with `403` pre-accept plus the `1008`/`1013` close shapes on dedicated headers; `guard-core-engine` moves to a direct dependency for the upgrade-sequence primitives (#37)
+
 ## [Unreleased]
 
 ### Changed
