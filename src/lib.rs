@@ -181,11 +181,11 @@ pub use tower_guard_rs::{
     OnBlockHook, RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL, RateLimitConfig, RateLimitConfigError,
     RateLimitDecision, RateLimitEntry, RateLimitStage, RateLimitStageConfig, RateLimitTier,
     RateLimiter, RequestLoggingStage, RequestLoggingStageConfig, RequestObservation,
-    RequiredHeader, ResolvedBan, ResponseProcessor, RouteDetectionExclusions, RouteGuard,
-    RouteRateLimits, RouteRateResolver, SecurityConfig, SecurityConfigError, SecurityEventBus,
-    SecurityHeadersConfig, SlidingWindowStore, StageResponse, Threat, ThreatBanEntry, TierDecision,
-    TimeWindowStage, UserAgentConfigError, UserAgentStage, UserAgentStageConfig, ViolationCounters,
-    default_config, provided_layers,
+    RequiredHeader, ResolvedBan, ResponseProcessor, RouteConfig, RouteConfigResolver,
+    RouteDetectionExclusions, RouteGuard, RouteRateLimits, RouteRateResolver, SecurityConfig,
+    SecurityConfigError, SecurityEventBus, SecurityHeadersConfig, SlidingWindowStore,
+    StageResponse, Threat, ThreatBanEntry, TierDecision, TimeWindowStage, UserAgentConfigError,
+    UserAgentStage, UserAgentStageConfig, ViolationCounters, default_config, provided_layers,
 };
 
 pub mod status;

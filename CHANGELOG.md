@@ -21,9 +21,16 @@ The reference-surface release: the status route and the WebSocket upgrade layer 
 
 ### Added
 
+- The route-config carrier surface (the GAP-R2 axum leg): `RouteConfig` + `RouteConfigResolver` re-exported and `GuardLayer::with_route_configs` reachable from the thin surface - the tower pipeline resolves the route's `RouteConfig` per request ((method, path), an `Arc<RouteConfig>` request extension winning over the resolver) and consumes it with the reference semantics: `bypassed_checks` (+ the `"all"` wildcard) skip the named checks, `require_https` forces the reference `301`, `max_request_size` replaces the route's body cap, `blocked_user_agents` runs additively before the global filter, the rate-limit group becomes the route's tier, and the detection-exclusion group resolves for the route; end-to-end Router twins pin the bypass semantics, the redirect, the tier, the extension precedence, the additive UA list, and the fail-secure invalid tier
+
+
+### Added
+
 - The unified-config consumption (`with_security_config`, the GAP-R1 axum leg): the 129-field `SecurityConfig` (the fieldized reference surface in guard-core-engine) builds the wired pipeline in one call under the axum constructor name - `GuardLayer::from_security_config` re-exported through the thin surface, with `SecurityConfig`, `SecurityConfigError`, `GuardConfigError`, and the `LogLevel`/`LogFormat`/`BufferOverflowPolicy` knob enums re-exported alongside; invalid values fail closed through the typed `GuardConfigError`; the reference `exclude_paths` carve-out and the ip_filter denial behaviors (passive logs-and-forwards, the `on_block` hook with the `ip_security` payload keys, the custom-error body override) ride the same call; end-to-end Router twins pin every consumed group through `oneshot`
 
 ### Changed
+- The route-config bypass consumption follows the reference's coarse query vocabulary (the tower pipeline's queries: `ip` for the gate, the route IP restrictions, and the country arms; `ip_ban` for the ban arm; `clouds`; `rate_limit`; `penetration` for the scan; the `"all"` wildcard), and the route-config twins carry the corrected names
+
 
 - The CI coverage gate computes line coverage from the lcov export's per-line DA records instead of llvm-cov's summary table: llvm-cov 22's summary aggregation falsely reports missed lines that no line-level view (show text/html, lcov, cobertura, the JSON segment list) can see on the same profdata, and the divergence persists on the newest available toolchain (cargo-llvm-cov 0.9.1 + rustc 1.99.0). The gate keeps the same fail-closed 100%-lines semantics with nothing hidden or excluded; the summary table stays in the job as an informational printout. Evidence linked in the workflow (#36)
 
