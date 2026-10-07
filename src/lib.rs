@@ -56,6 +56,30 @@
 //! stay detection-screened. Cloning the layer shares the one limiter and ban
 //! store: they are process-global by design.
 //!
+//! ## The full stage surface (the reference 17-check pipeline, wired)
+//!
+//! Every reference check the engine ships is installable on the
+//! [`GuardLayer`] [`with_guard`] returns, and the service runs the installed
+//! set in the reference pipeline order ([`provided_layers`] hands the same
+//! stages back as standalone tower layers in that order):
+//!
+//! | Reference check | Builder |
+//! |---|---|
+//! | 2 `emergency_mode` | [`GuardLayer::with_emergency_mode`] |
+//! | 3 `https_enforcement` | [`GuardLayer::with_https_enforcement`] |
+//! | 4 `request_logging` | [`GuardLayer::with_request_logging`] |
+//! | 5 `request_size_content` | [`GuardLayer::with_body_cap`] (413) |
+//! | 6 + 7 `required_headers` / authentication | [`GuardLayer::with_headers_auth`] |
+//! | 8 referrer | [`GuardLayer::with_referrer_gate`] |
+//! | 9 `custom_validators` | [`GuardLayer::with_custom_checks`] |
+//! | 10 `time_window` | [`GuardLayer::with_time_window_gate`] |
+//! | 12b geo country blocking | [`GuardLayer::with_geo_blocking`] |
+//! | 13 `cloud_provider` | [`GuardLayer::with_cloud_provider`] |
+//! | 14 `user_agent` | [`GuardLayer::with_user_agent`] |
+//! | 12a / 15 / 16 bans / `rate_limit` / detection feed | [`GuardLayer::with_rate_limiting`] + [`GuardLayer::with_ip_banning`] |
+//! | 17 `custom_request` | [`GuardLayer::with_custom_checks`] |
+//! | response pass (return rules + security headers + CORS) | [`GuardLayer::with_response_processor`] |
+//!
 //! ## The 4.2.0 wave surfaces (re-exported, axum-shaped)
 //!
 //! Every wave surface configurable on [`GuardLayer`] is reachable through
@@ -146,14 +170,21 @@
 
 pub use tower_guard_rs::{
     ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord, BanStore,
-    BlockPayload, BoxError, Clock, CustomErrorResponses, DetectConfig, DetectVerdict,
-    DetectionExclusionConfig, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GeoIpHandler, GuardBody,
-    GuardClientIp, GuardLayer, GuardService, IpBanConfig, IpBanConfigError, IpBanManager,
-    IpGateConfig, IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict, OVERSIZE_MESSAGE,
-    ObservabilityConfig, OnBlockHook, RATE_LIMITED_MESSAGE, RateLimitConfig, RateLimitConfigError,
-    RateLimitDecision, RateLimitEntry, RateLimitTier, RateLimiter, RequestObservation, ResolvedBan,
-    RouteDetectionExclusions, RouteRateLimits, SecurityEventBus, SlidingWindowStore, StageResponse,
-    Threat, ThreatBanEntry, TierDecision, ViolationCounters, default_config,
+    BlockPayload, BoxError, Clock, CloudDecision, CloudProviderStage, CorsConfig,
+    CustomChecksStage, CustomErrorResponses, DetectConfig, DetectVerdict, DetectionExclusionConfig,
+    EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GateAnswer,
+    GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody, GuardClientIp, GuardLayer,
+    GuardService, GuardStageLayer, GuardStageService, HeaderAuthRules, HeadersAuthAnswer,
+    HeadersAuthStage, HttpsEnforcementStage, HttpsRedirect, IpBanConfig, IpBanConfigError,
+    IpBanManager, IpGateConfig, IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict,
+    OVERSIZE_MESSAGE, ObservabilityConfig, OnBlockHook, RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL,
+    RateLimitConfig, RateLimitConfigError, RateLimitDecision, RateLimitEntry, RateLimitStage,
+    RateLimitStageConfig, RateLimitTier, RateLimiter, RequestLoggingStage,
+    RequestLoggingStageConfig, RequestObservation, RequiredHeader, ResolvedBan, ResponseProcessor,
+    RouteDetectionExclusions, RouteGuard, RouteRateLimits, RouteRateResolver, SecurityEventBus,
+    SecurityHeadersConfig, SlidingWindowStore, StageResponse, Threat, ThreatBanEntry, TierDecision,
+    TimeWindowStage, UserAgentConfigError, UserAgentStage, UserAgentStageConfig, ViolationCounters,
+    default_config, provided_layers,
 };
 
 pub mod status;

@@ -43,6 +43,8 @@ jobs:
         with:
           # Merged as rennf93/tower-guard-rs#13; tracks master.
           repository: rennf93/tower-guard-rs
+          # The stage composition merged as rennf93/tower-guard-rs#35;
+          # master carries it.
           ref: master
           path: tower-checkout
           persist-credentials: false
