@@ -169,10 +169,10 @@
 //! ```
 
 pub use tower_guard_rs::{
-    ACTIVITY_BANNED_MESSAGE, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord, BanStore,
-    BlockPayload, BoxError, BufferOverflowPolicy, Clock, CloudDecision, CloudProviderStage,
-    CorsConfig, CustomChecksStage, CustomErrorResponses, DetectConfig, DetectVerdict,
-    DetectionExclusionConfig, EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE,
+    ACTIVITY_BANNED_MESSAGE, AgentStats, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord,
+    BanStore, BlockPayload, BoxError, BufferOverflowPolicy, Clock, CloudDecision,
+    CloudProviderStage, CorsConfig, CustomChecksStage, CustomErrorResponses, DetectConfig,
+    DetectVerdict, DetectionExclusionConfig, EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE,
     FORBIDDEN_MESSAGE, GateAnswer, GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody,
     GuardClientIp, GuardConfigError, GuardLayer, GuardService, GuardStageLayer, GuardStageService,
     HeaderAuthRules, HeadersAuthAnswer, HeadersAuthStage, HttpsEnforcementStage, HttpsRedirect,

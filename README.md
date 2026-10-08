@@ -117,7 +117,7 @@ Note that `Router::layer` applies the layer to registered routes; a request that
 
 ## Status route
 
-`status::status_router(GuardStatus::new().with_cloud_table(table))` is the `add_status_route` mirror (fastapi-guard `guard/status.py` + `HandlerInitializer.get_initialization_status`): merge the returned router to mount `GET /_guard/status` (`status::DEFAULT_STATUS_PATH`), serving the cloud-provider readiness table (`{"ready":...}` per provider from the live `CloudIpTable`) and the geo-ip component (`null` without a handler, `{"configured":true}` with one). The Rust engine tracks cloud readiness only, so the `entries`/`last_refreshed` keys the Python family serves have no counterpart here; the payload is rendered per request from in-memory state with no dependency added.
+`status::status_router(GuardStatus::new().with_cloud_table(table))` is the `add_status_route` mirror (fastapi-guard `guard/status.py` + `HandlerInitializer.get_initialization_status`): merge the returned router to mount `GET /_guard/status` (`status::DEFAULT_STATUS_PATH`), serving the cloud-provider status table (`{"ready":..., "last_refreshed":<unix-seconds|null>, "entries":N}` per provider from the live `CloudIpTable`) and the geo-ip component (`null` without a handler, `{"configured":true}` with the lookup trait only, the `{ready, last_refreshed, entries}` health snapshot with the `IpInfoManager` lifecycle manager). The maintenance trio rides the re-exported `GuardLayer`: `reset()` drops the rate-limit windows, `refresh_cloud_ip_ranges()` schedules one single-flight refresh through `with_cloud_refresh_scheduler`, and `agent_stats()` answers the reference property's no-agent shape.
 
 ## Engine dependency
 
