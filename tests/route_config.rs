@@ -184,3 +184,119 @@ async fn an_invalid_carrier_tier_fails_secure_through_the_router() {
     let (status, _) = status_for(guarded(layer), request_from("203.0.113.9", "/hello")).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
+
+// --- the carrier's stage knobs (the RC1 axum leg): the tower pipeline's
+// carrier lanes pinned through the axum surface, one matching-route twin
+// and its off-route silence per knob ---
+
+fn request_with_headers(ip: &str, uri: &str, headers: &[(&str, &str)]) -> Request<Body> {
+    let mut builder = Request::builder()
+        .uri(uri)
+        .extension(GuardClientIp(IpAddr::from_str(ip).expect("test ip")));
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    builder.body(Body::empty()).expect("request")
+}
+
+#[tokio::test]
+async fn route_ip_whitelist_overrides_the_global_lists() {
+    // The global gate blacklists the address; the route's whitelist takes
+    // over for its route and misses deny with the reference Forbidden
+    // shape.
+    let gate = axum_guard_rs::IpGateConfig::new([] as [&str; 0], ["203.0.113.9"], [] as [&str; 0])
+        .expect("valid lists");
+    let config = RouteConfig {
+        ip_whitelist: Some(vec![String::from("203.0.113.9")]),
+        ..RouteConfig::default()
+    };
+    let layer = with_guard(axum_guard_rs::default_config())
+        .with_ip_gate(gate)
+        .with_route_configs(resolver_for(&[("GET", "/hello")], config));
+    let (status, _) = status_for(
+        guarded(layer.clone()),
+        request_from("203.0.113.9", "/hello"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "the route whitelist match passes");
+    let (status, _) = status_for(guarded(layer.clone()), request_from("192.0.2.5", "/hello")).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the route whitelist miss denies"
+    );
+    let (status, _) = status_for(guarded(layer), request_from("203.0.113.9", "/open")).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the global gate holds off-route"
+    );
+}
+
+#[tokio::test]
+async fn route_required_headers_demand_their_headers() {
+    let config = RouteConfig {
+        required_headers: [(String::from("X-Request-ID"), String::from("required"))]
+            .into_iter()
+            .collect(),
+        ..RouteConfig::default()
+    };
+    let layer = with_guard(axum_guard_rs::default_config())
+        .with_route_configs(resolver_for(&[("GET", "/hello")], config));
+    let (status, body) =
+        status_for(guarded(layer.clone()), request_from("192.0.2.9", "/hello")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, "Missing required header: X-Request-ID");
+    let (status, _) = status_for(
+        guarded(layer),
+        request_with_headers("192.0.2.9", "/hello", &[("x-request-id", "abc")]),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn route_require_referrer_gates_its_route() {
+    let config = RouteConfig {
+        require_referrer: Some(vec![String::from("partner.example.com")]),
+        ..RouteConfig::default()
+    };
+    let layer = with_guard(axum_guard_rs::default_config())
+        .with_route_configs(resolver_for(&[("GET", "/hello")], config));
+    let (status, body) =
+        status_for(guarded(layer.clone()), request_from("192.0.2.9", "/hello")).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(body, "Referrer required");
+    let (status, _) = status_for(
+        guarded(layer),
+        request_with_headers(
+            "192.0.2.9",
+            "/hello",
+            &[("referer", "https://partner.example.com/x")],
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn route_enable_suspicious_detection_false_skips_the_scan() {
+    let config = RouteConfig {
+        enable_suspicious_detection: false,
+        ..RouteConfig::default()
+    };
+    let layer = with_guard(axum_guard_rs::default_config())
+        .with_route_configs(resolver_for(&[("GET", "/open")], config));
+    let (open, _) = status_for(
+        guarded(layer.clone()),
+        request_from("203.0.113.9", "/open?q=1%27+OR+1%3D1"),
+    )
+    .await;
+    assert_eq!(open, StatusCode::OK, "the scan is off on its route");
+    let (blocked, _) = status_for(
+        guarded(layer),
+        request_from("203.0.113.9", "/hello?q=1%27+OR+1%3D1"),
+    )
+    .await;
+    assert_eq!(blocked, StatusCode::BAD_REQUEST, "the scan holds off-route");
+}
