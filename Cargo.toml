@@ -25,6 +25,10 @@ axum = { version = "0.8", default-features = false, features = ["http1", "json",
 # guard module runs the reference upgrade sequence directly on the engine
 # primitives (the sibling `tower-guard-rs` wraps the HTTP request path).
 guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine", version = "4.3.1" }
+# The facade carries the geo lifecycle manager (`IpInfoManager`) the status
+# route's geo-health snapshot renders (same path/version discipline as the
+# engine above).
+guard-core-rs = { path = "../guard-core-rs/crates/guard-core-rs", version = "4.3.1" }
 # tower-guard-rs 1.4.0 is published to crates.io (itself pinned to
 # guard-core-engine 4.3.1); the path points at a sibling tower-guard-rs
 # checkout so local builds and CI (see .github/workflows/ci.yml) exercise the
@@ -34,6 +38,7 @@ tower-guard-rs = { path = "../tower-guard-rs", version = "1.4.0" }
 # Direct handle on the `Layer`/`Service` traits the `ClientIpLayer` implements;
 # tower 0.5 is already the resolved version through tower-guard-rs.
 tower = { version = "0.5", default-features = false }
+serde_json = "1"
 
 [dev-dependencies]
 chrono = "0.4"

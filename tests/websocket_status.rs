@@ -144,7 +144,7 @@ async fn status_route_serves_the_snapshot_next_to_the_guard() {
         .expect("body")
         .to_bytes();
     let payload = String::from_utf8_lossy(&body);
-    assert!(payload.contains(r#""AWS":{"ready":true}"#));
+    assert!(payload.contains(r#""AWS":{"ready":true,"last_refreshed":"#));
     assert!(payload.contains(r#""geo_ip":{"configured":true}"#));
 }
 
