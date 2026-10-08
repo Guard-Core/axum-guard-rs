@@ -107,6 +107,9 @@ fn env_config() -> DetectConfig {
             "GUARD_BINARY_MIN_RUN_LENGTH",
             defaults.binary_min_run_length,
         ),
+        max_scan_values: env_usize("GUARD_MAX_SCAN_VALUES", defaults.max_scan_values),
+        max_scan_chars: env_usize("GUARD_MAX_SCAN_CHARS", defaults.max_scan_chars),
+        max_json_depth: env_usize("GUARD_MAX_JSON_DEPTH", defaults.max_json_depth),
     }
 }
 
