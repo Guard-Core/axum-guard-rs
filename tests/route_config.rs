@@ -300,3 +300,48 @@ async fn route_enable_suspicious_detection_false_skips_the_scan() {
     .await;
     assert_eq!(blocked, StatusCode::BAD_REQUEST, "the scan holds off-route");
 }
+
+#[tokio::test]
+async fn route_cloud_provider_list_resolves_over_the_global() {
+    // The RC2 route-over-global resolution through the axum surface: the
+    // route's GCP list replaces the global AWS list for its route (the
+    // AWS address the global lane blocks passes), and the global lane
+    // holds off-route.
+    let table = guard_core_rs::cloud_provider::CloudIpTable::default();
+    table
+        .set_provider_ranges("AWS", vec![("192.0.2.0/24".to_owned(), None)])
+        .expect("valid ranges");
+    table
+        .set_provider_ranges("GCP", vec![("198.51.100.0/24".to_owned(), None)])
+        .expect("valid ranges");
+    let cloud = guard_core_rs::cloud_provider::CloudProviderStage::builder(
+        guard_core_rs::cloud_provider::CloudProviderStageConfig {
+            block_cloud_providers: guard_core_engine::cloud_provider::parse_cloud_selectors([
+                "AWS",
+            ])
+            .expect("valid selectors"),
+            table,
+            passive_mode: false,
+        },
+    )
+    .build();
+    let config = RouteConfig {
+        block_cloud_providers: [String::from("GCP")].into_iter().collect(),
+        ..RouteConfig::default()
+    };
+    let layer = with_guard(axum_guard_rs::default_config())
+        .with_cloud_provider(cloud)
+        .with_route_configs(resolver_for(&[("GET", "/hello")], config));
+    let (status, _) = status_for(guarded(layer.clone()), request_from("192.0.2.9", "/hello")).await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the route list overrides the global"
+    );
+    let (status, _) = status_for(guarded(layer), request_from("192.0.2.9", "/open")).await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the global list holds off-route"
+    );
+}
