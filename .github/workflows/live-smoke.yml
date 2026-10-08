@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Merged as rennf93/tower-guard-rs#13; tracks master.
-          repository: rennf93/tower-guard-rs
+          repository: Guard-Core/tower-guard-rs
           # The stage composition merged as rennf93/tower-guard-rs#35;
           # master carries it.
           ref: master
@@ -56,7 +56,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Merged as rennf93/guard-core-rs#22; tracks master.
-          repository: rennf93/guard-core-rs
+          repository: Guard-Core/guard-core-rs
           # Merged as rennf93/guard-core-rs#34; tracks master.
           ref: master
           path: core-checkout

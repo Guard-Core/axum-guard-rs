@@ -2,11 +2,11 @@
 
 `axum-guard-rs` is application-layer security middleware for
 [axum](https://github.com/tokio-rs/axum), powered by the
-[guard-core-rs](https://github.com/rennf93/guard-core-rs) detection engine.
-It is part of the [Guard ecosystem](https://github.com/rennf93).
+[guard-core-rs](https://github.com/Guard-Core/guard-core-rs) detection engine.
+It is part of the [Guard ecosystem](https://github.com/Guard-Core).
 
 The crate is the thin axum-facing surface over
-[tower-guard-rs](https://github.com/rennf93/tower-guard-rs): axum routers are
+[tower-guard-rs](https://github.com/Guard-Core/tower-guard-rs): axum routers are
 `tower` services, so `Router::layer` with the generic `GuardLayer` is the
 whole integration. The `with_guard` constructor, the re-exports an axum
 application needs, and axum-specific tests pin the behavior against

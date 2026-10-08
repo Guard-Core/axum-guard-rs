@@ -29,7 +29,7 @@ jobs:
       - name: Checkout tower-guard-rs (path dependency)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: rennf93/tower-guard-rs
+          repository: Guard-Core/tower-guard-rs
           # The stage composition merged as rennf93/tower-guard-rs#35;
           # master carries it.
           ref: master
@@ -39,7 +39,7 @@ jobs:
       - name: Checkout guard-core-rs (transitive path dependency)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: rennf93/guard-core-rs
+          repository: Guard-Core/guard-core-rs
           ref: master
           path: core-checkout
           persist-credentials: false

@@ -3,9 +3,9 @@ Guidance for AI agents (including Claude Code) working in this repository.
 
 ## Project Overview
 
-axum-guard-rs is the axum adapter for the Guard ecosystem. It provides `with_guard(config)`, returning the [`GuardLayer`](https://docs.rs/tower/latest/tower/trait.Layer.html) from [tower-guard-rs](https://github.com/rennf93/tower-guard-rs), which drops straight into `Router::layer`. Axum middleware is tower middleware, so there is no axum-specific screening code here: this crate is the axum-facing surface (constructor, re-exports, axum-typed tests) over the shared `tower` implementation, backed by the [guard-core-rs](https://github.com/rennf93/guard-core-rs) detection engine.
+axum-guard-rs is the axum adapter for the Guard ecosystem. It provides `with_guard(config)`, returning the [`GuardLayer`](https://docs.rs/tower/latest/tower/trait.Layer.html) from [tower-guard-rs](https://github.com/Guard-Core/tower-guard-rs), which drops straight into `Router::layer`. Axum middleware is tower middleware, so there is no axum-specific screening code here: this crate is the axum-facing surface (constructor, re-exports, axum-typed tests) over the shared `tower` implementation, backed by the [guard-core-rs](https://github.com/Guard-Core/guard-core-rs) detection engine.
 
-- **Repository**: https://github.com/rennf93/axum-guard-rs
+- **Repository**: https://github.com/Guard-Core/axum-guard-rs
 - **Language**: Rust, edition 2024, MSRV 1.92
 - **License**: MIT OR Apache-2.0
 - **Version**: 0.1.0
@@ -43,7 +43,7 @@ The security behavior lives in `tower-guard-rs` and the engine. This crate owns 
 
 - `tower-guard-rs = { path = "../tower-guard-rs", version = "0.1.0" }` and, transitively, `guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine" }`.
 - **TODO(engine):** switch both to versioned crates.io dependencies once `tower-guard-rs` and `guard-core-rs` are tagged and published.
-- CI checks out `rennf93/tower-guard-rs` (currently `feat/engine-integration`, to be flipped to `master` after that PR merges) and `rennf93/guard-core-rs` (`master`), moving both to the path locations. Moving branches are a deliberate, documented supply-chain tradeoff, mirroring `laravel-guard`/`symfony-guard`.
+- CI checks out `Guard-Core/tower-guard-rs` (`master`, flipped after the engine integration merged) and `Guard-Core/guard-core-rs` (`master`), moving both to the path locations. Moving branches are a deliberate, documented supply-chain tradeoff, mirroring `laravel-guard`/`symfony-guard`.
 - When `tower-guard-rs` merges to master, update `.github/workflows/ci.yml` (two `ref:` lines), the README, and this file in the same change.
 
 ## Development Commands
@@ -94,7 +94,7 @@ axum-guard-rs/
 
 ## Related Projects
 
-- [tower-guard-rs](https://github.com/rennf93/tower-guard-rs): the generic `tower` implementation this crate composes.
-- [guard-core-rs](https://github.com/rennf93/guard-core-rs): the Rust detection engine.
-- [guard-core-ts](https://github.com/rennf93/guard-core-ts): TypeScript port, source of the view mapping this adapter follows.
-- [guard-core](https://github.com/rennf93/guard-core): Python reference implementation and spec owner.
+- [tower-guard-rs](https://github.com/Guard-Core/tower-guard-rs): the generic `tower` implementation this crate composes.
+- [guard-core-rs](https://github.com/Guard-Core/guard-core-rs): the Rust detection engine.
+- [guard-core-ts](https://github.com/Guard-Core/guard-core-ts): TypeScript port, source of the view mapping this adapter follows.
+- [guard-core](https://github.com/Guard-Core/guard-core): Python reference implementation and spec owner.
