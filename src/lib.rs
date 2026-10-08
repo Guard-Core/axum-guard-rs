@@ -89,7 +89,9 @@
 //! [`RouteRateLimits`] request extension winning, [`GuardLayer::with_geo_handler`]),
 //! per-route detection exclusions ([`GuardLayer::with_detection_exclusions`]
 //! plus the [`RouteDetectionExclusions`] request extension), the event bus
-//! and observability knobs ([`GuardLayer::with_event_bus`],
+//! and observability knobs ([`GuardLayer::with_event_bus`] - the response
+//! pass joins the stream with the `security_headers_applied` event when
+//! the security-header set lands on a forwarded response,
 //! [`GuardLayer::with_observability`]), `on_block` + custom error bodies
 //! ([`GuardLayer::with_on_block`], [`GuardLayer::with_custom_error_responses`]),
 //! the distributed stores ([`GuardLayer::with_distributed_store`] +
