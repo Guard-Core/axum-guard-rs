@@ -1,6 +1,6 @@
 ---
 name: axum-guard-rs
-description: Use when working in the axum-guard-rs Rust crate (github.com/rennf93/axum-guard-rs): changing the with_guard constructor or re-exports, adjusting the axum Router::layer integration with tower-guard-rs, updating the sibling path dependencies or the CI checkout steps, debugging axum body/IntoResponse bound issues with GuardService, or answering questions about what the axum adapter inspects and blocks. Covers CI-verified cargo commands, why security logic must not be duplicated here, and the trait-bound facts about axum::body::Body the integration depends on.
+description: Use when working in the axum-guard-rs Rust crate (github.com/Guard-Core/axum-guard-rs): changing the with_guard constructor or re-exports, adjusting the axum Router::layer integration with tower-guard-rs, updating the sibling path dependencies or the CI checkout steps, debugging axum body/IntoResponse bound issues with GuardService, or answering questions about what the axum adapter inspects and blocks. Covers CI-verified cargo commands, why security logic must not be duplicated here, and the trait-bound facts about axum::body::Body the integration depends on.
 ---
 
 # axum-guard-rs
@@ -38,7 +38,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 ## Footguns
 
 - Panic recovery is tested in `tower-guard-rs` via a `#[cfg(test)]` detector seam; it is deliberately not public and not re-tested here.
-- Dependencies are path deps (`../tower-guard-rs`, transitively `../guard-core-rs/crates/guard-core-engine`) with a `TODO(engine)` to move to versioned crates. CI checks out `rennf93/tower-guard-rs@feat/engine-integration` (flip to `master` after that PR merges) and `rennf93/guard-core-rs@master`.
+- Dependencies are path deps (`../tower-guard-rs`, transitively `../guard-core-rs/crates/guard-core-engine`) with a `TODO(engine)` to move to versioned crates. CI checks out `Guard-Core/tower-guard-rs@master` and `Guard-Core/guard-core-rs@master`.
 - Payloads in tests must come from the spec 4.0.2 corpus so they are guaranteed threats.
 - `axum` uses `default-features = false, features = ["http1", "json", "tokio"]`; adding a feature is a deliberate act.
 

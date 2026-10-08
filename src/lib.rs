@@ -1,13 +1,13 @@
 //! # axum-guard-rs
 //!
 //! Application-layer security middleware for [axum](https://github.com/tokio-rs/axum),
-//! powered by the [guard-core-rs](https://github.com/rennf93/guard-core-rs)
-//! detection engine. Part of the [Guard ecosystem](https://github.com/rennf93).
+//! powered by the [guard-core-rs](https://github.com/Guard-Core/guard-core-rs)
+//! detection engine. Part of the [Guard ecosystem](https://github.com/Guard-Core).
 //!
 //! ## Status: implemented (v0.1.0)
 //!
 //! [`with_guard`] returns the generic [`GuardLayer`] from
-//! [`tower-guard-rs`](https://github.com/rennf93/tower-guard-rs), which is
+//! [`tower-guard-rs`](https://github.com/Guard-Core/tower-guard-rs), which is
 //! already axum-shaped: axum routers are `tower` services, so
 //! [`Router::layer`](axum::Router::layer) is the whole integration. This crate
 //! is the thin axum-facing surface: the `with_guard` constructor, the
@@ -25,7 +25,7 @@
 //! cap (262 144 bytes by default) and oversized bodies are rejected with `413`
 //! rather than forwarded unscanned. The adapter is fail-secure: a body read
 //! error or an engine panic answers `500`, never an uninspected passthrough.
-//! See the [`tower-guard-rs`](https://github.com/rennf93/tower-guard-rs)
+//! See the [`tower-guard-rs`](https://github.com/Guard-Core/tower-guard-rs)
 //! documentation for the full behavior tables, response shapes, and the
 //! header exclusion list.
 //!

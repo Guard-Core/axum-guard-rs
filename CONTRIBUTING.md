@@ -15,8 +15,8 @@ automatically; locally, clone the engine next to this repository (side by side i
 directory):
 
 ```bash
-git clone https://github.com/rennf93/guard-core-rs ../guard-core-rs
-git clone https://github.com/rennf93/tower-guard-rs ../tower-guard-rs
+git clone https://github.com/Guard-Core/guard-core-rs ../guard-core-rs
+git clone https://github.com/Guard-Core/tower-guard-rs ../tower-guard-rs
 cargo build
 cargo test
 ```

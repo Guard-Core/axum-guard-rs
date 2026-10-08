@@ -1,8 +1,8 @@
 # axum-guard-rs
 
-Application-layer security middleware for [axum](https://github.com/tokio-rs/axum), powered by the [guard-core-rs](https://github.com/rennf93/guard-core-rs) detection engine. Part of the [guard ecosystem](https://github.com/rennf93).
+Application-layer security middleware for [axum](https://github.com/tokio-rs/axum), powered by the [guard-core-rs](https://github.com/Guard-Core/guard-core-rs) detection engine. Part of the [guard ecosystem](https://github.com/Guard-Core).
 
-Docs: <https://rennf93.github.io/axum-guard-rs/>
+Docs: <https://guard-core.github.io/axum-guard-rs/>
 
 **Status:** Released. Version 1.2.0, published to crates.io. `with_guard(config)` returns a `tower` layer that drops straight into `Router::layer`.
 
@@ -10,11 +10,11 @@ Docs: <https://rennf93.github.io/axum-guard-rs/>
 
 The guard ecosystem provides application-layer API security middleware across multiple languages and frameworks:
 
-- **Python**: [fastapi-guard](https://github.com/rennf93/fastapi-guard), [flaskapi-guard](https://github.com/rennf93/flaskapi-guard), [djapi-guard](https://github.com/rennf93/djapi-guard), [tornadoapi-guard](https://github.com/rennf93/tornadoapi-guard)
+- **Python**: [fastapi-guard](https://github.com/Guard-Core/fastapi-guard), [flaskapi-guard](https://github.com/Guard-Core/flaskapi-guard), [djapi-guard](https://github.com/Guard-Core/djapi-guard), [tornadoapi-guard](https://github.com/Guard-Core/tornadoapi-guard)
 - **TypeScript**: guard-core-ts with adapters for Express, Fastify, Hono, NestJS
-- **Rust**: [guard-core-rs](https://github.com/rennf93/guard-core-rs) with adapters for [tower](https://github.com/rennf93/tower-guard-rs) (this repo wraps it), [actix-web](https://github.com/rennf93/actix-guard-rs), and [rocket](https://github.com/rennf93/rocket-guard-rs)
+- **Rust**: [guard-core-rs](https://github.com/Guard-Core/guard-core-rs) with adapters for [tower](https://github.com/Guard-Core/tower-guard-rs) (this repo wraps it), [actix-web](https://github.com/Guard-Core/actix-guard-rs), and [rocket](https://github.com/Guard-Core/rocket-guard-rs)
 
-Axum middleware is tower middleware, so this crate is the thin axum-facing surface over [tower-guard-rs](https://github.com/rennf93/tower-guard-rs): the `with_guard` constructor, the re-exports an axum application needs, and the axum-specific tests that pin behavior against `axum::body::Body`. It contains no security logic of its own.
+Axum middleware is tower middleware, so this crate is the thin axum-facing surface over [tower-guard-rs](https://github.com/Guard-Core/tower-guard-rs): the `with_guard` constructor, the re-exports an axum application needs, and the axum-specific tests that pin behavior against `axum::body::Body`. It contains no security logic of its own.
 
 ## Usage
 

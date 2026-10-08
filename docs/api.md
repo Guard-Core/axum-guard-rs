@@ -2,7 +2,7 @@
 
 The public surface of `axum_guard_rs` `1.0.0`. The full crate documentation
 is also in `src/lib.rs` (build it with `cargo doc --open`). Most behavior is
-defined by [tower-guard-rs](https://github.com/rennf93/tower-guard-rs) and
+defined by [tower-guard-rs](https://github.com/Guard-Core/tower-guard-rs) and
 re-exported here.
 
 ## Guard layer
