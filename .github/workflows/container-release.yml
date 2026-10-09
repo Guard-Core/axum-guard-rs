@@ -48,6 +48,19 @@ jobs:
       - name: Place guard-core-rs at the sibling path dependency location
         run: mv core-checkout ../guard-core-rs
 
+      # The advanced demo's compose carries a second sibling context
+      # (tower: ../../../tower-guard-rs); place that checkout too.
+      - name: Checkout tower-guard-rs (sibling compose context)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Guard-Core/tower-guard-rs
+          ref: master
+          path: tower-checkout
+          persist-credentials: false
+
+      - name: Place tower-guard-rs at the sibling compose context location
+        run: mv tower-checkout ../tower-guard-rs
+
       - name: Set version tag
         id: set_version
         run: |
