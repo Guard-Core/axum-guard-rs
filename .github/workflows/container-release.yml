@@ -67,8 +67,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build the demo image
+        # Compose's bake refuses to read the sibling engine context outside
+        # the working directory (fs.read=..), so invoke compose from the
+        # parent directory: the engine checkout then falls inside the
+        # default read scope.
+        working-directory: ${{ github.workspace }}/..
         run: |
-          docker compose -f examples/advanced_app/docker-compose.yml build advanced-app
+          docker compose -f axum-guard-rs/examples/advanced_app/docker-compose.yml build advanced-app
 
       - name: Tag and push to GHCR
         run: |
