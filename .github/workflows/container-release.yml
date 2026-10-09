@@ -77,10 +77,10 @@ jobs:
 
       - name: Tag and push to GHCR
         run: |
-          docker tag Rust/axum-guard-rs-advanced-app:local ghcr.io/guard-core/Rust/axum-guard-rs-example:latest
-          docker push ghcr.io/guard-core/Rust/axum-guard-rs-example:latest
+          docker tag axum-guard-rs-advanced-app:local ghcr.io/guard-core/axum-guard-rs-example:latest
+          docker push ghcr.io/guard-core/axum-guard-rs-example:latest
 
           if [[ "${{ env.IS_RELEASE }}" == "true" ]]; then
-            docker tag Rust/axum-guard-rs-advanced-app:local ghcr.io/guard-core/Rust/axum-guard-rs-example:${{ env.VERSION }}
-            docker push ghcr.io/guard-core/Rust/axum-guard-rs-example:${{ env.VERSION }}
+            docker tag axum-guard-rs-advanced-app:local ghcr.io/guard-core/axum-guard-rs-example:${{ env.VERSION }}
+            docker push ghcr.io/guard-core/axum-guard-rs-example:${{ env.VERSION }}
           fi
