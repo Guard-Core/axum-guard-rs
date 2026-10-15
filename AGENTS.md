@@ -8,8 +8,8 @@ axum-guard-rs is the axum adapter for the Guard ecosystem. It provides `with_gua
 - **Repository**: https://github.com/Guard-Core/axum-guard-rs
 - **Language**: Rust, edition 2024, MSRV 1.92
 - **License**: MIT OR Apache-2.0
-- **Version**: 0.1.0
-- **Status**: implemented and tested. Not published to crates.io: dependencies are local paths until the siblings are tagged (see [Sibling Dependencies](#sibling-dependencies)).
+- **Version**: 1.5.0 (see `Cargo.toml`)
+- **Status**: implemented and tested. The engine and tower crates are published; this repo builds them from sibling checkouts through path dependencies that also carry a registry version floor (see [Sibling Dependencies](#sibling-dependencies)).
 
 ## Ecosystem Position
 
@@ -29,7 +29,7 @@ The security behavior lives in `tower-guard-rs` and the engine. This crate owns 
 
 - **No security logic in this crate**, and no duplicated screening logic either: request inspection belongs in `tower-guard-rs`, detection in the engine.
 - **No new middleware implementation.** Do not reimplement body buffering or view scanning against `axum::body::Body`. If an axum-specific need appears (for example `axum::extract::Request` handling), the fix goes in `tower-guard-rs` as a generic mechanism.
-- **Keep the dependency set minimal**: `axum` plus `tower-guard-rs` in `[dependencies]`. Test-only crates (tokio, tower `util`, serde_json, http-body-util) stay in `[dev-dependencies]`.
+- **Keep the dependency set minimal**: `axum`, `tower-guard-rs`, and the engine crates the websocket guard and status route use directly in `[dependencies]`. Test-only crates (tokio, tower `util`, serde_json, http-body-util) stay in `[dev-dependencies]`.
 - **Fail-secure is inherited, not re-decided.** Any change that would make a body read error or engine panic pass through must be rejected.
 
 ## How the Integration Works
@@ -41,8 +41,7 @@ The security behavior lives in `tower-guard-rs` and the engine. This crate owns 
 
 ## Sibling Dependencies
 
-- `tower-guard-rs = { path = "../tower-guard-rs", version = "0.1.0" }` and, transitively, `guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine" }`.
-- **TODO(engine):** switch both to versioned crates.io dependencies once `tower-guard-rs` and `guard-core-rs` are tagged and published.
+- `tower-guard-rs = { path = "../tower-guard-rs", version = "1.5.0" }`, `guard-core-engine` and `guard-core-rs` (both `path = "../guard-core-rs/crates/..."`, version floor 4.3.2). The engine crates and tower are published; the paths make local builds and CI compile them from source.
 - CI checks out `Guard-Core/tower-guard-rs` (`master`, flipped after the engine integration merged) and `Guard-Core/guard-core-rs` (`master`), moving both to the path locations. Moving branches are a deliberate, documented supply-chain tradeoff, mirroring `laravel-guard`/`symfony-guard`.
 
 ## Development Commands
@@ -121,7 +120,7 @@ axum-guard-rs/
 5. **Conventional commits** (`feat:`, `fix:`, `docs:`, `ci:`), matching history. No AI attribution in commit messages.
 6. **Document status honestly.** Nothing here is published; say so rather than implying a crates.io release. crates.io publishing is manual and owner-gated.
 7. **Update the README behavior tables** when the inherited mapping, response shapes, or cap semantics change (and mirror the change in `tower-guard-rs`).
-8. **Keep the engine surface claims honest.** guard-core-rs currently ships the CPU-bound detection pipeline only: no Redis, rate limiter, or ban manager. Do not document capabilities the engine does not expose.
+8. **Keep the engine surface claims honest.** Do not document capabilities the engine or `tower-guard-rs` do not expose; `exclude_paths` is scoped (not a bypass) and a missing peer is a `403` under `fail_secure`, so `client_ip_layer` is required with `with_security_config`.
 
 ## Related Projects
 

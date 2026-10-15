@@ -107,21 +107,20 @@ async fn blocked_user_agent_answers_the_403() {
 }
 
 #[tokio::test]
-async fn exclude_paths_bypass_the_pipeline() {
+async fn exclude_paths_are_scoped_not_a_bypass() {
     let config = SecurityConfig {
         blacklist: vec![String::from("203.0.113.9")],
         exclude_paths: vec![String::from("/docs")],
         ..SecurityConfig::default()
     };
-    // An excluded path bypasses every check, gate included: the
-    // blacklisted IP forwards on /docs.
-    let (bypassed, body) =
-        config_status_and_body(&config, request_from("203.0.113.9", "/docs")).await;
-    assert_eq!(bypassed, StatusCode::OK);
-    assert_eq!(body, "docs");
-    // Any other path takes the gate denial.
-    let (blocked, _) = config_status_and_body(&config, request_from("203.0.113.9", "/hello")).await;
+    // The reference scoped exclusion: the global IP gate still applies on an
+    // excluded path, so the blacklisted IP is denied on /docs too.
+    let (blocked, _) = config_status_and_body(&config, request_from("203.0.113.9", "/docs")).await;
     assert_eq!(blocked, StatusCode::FORBIDDEN);
+    let (allowed, body) =
+        config_status_and_body(&config, request_from("198.51.100.7", "/docs")).await;
+    assert_eq!(allowed, StatusCode::OK);
+    assert_eq!(body, "docs");
 }
 
 #[test]

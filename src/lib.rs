@@ -171,23 +171,29 @@
 //! ```
 
 pub use tower_guard_rs::{
-    ACTIVITY_BANNED_MESSAGE, AgentStats, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError, BanRecord,
-    BanStore, BlockPayload, BoxError, BufferOverflowPolicy, Clock, CloudDecision,
-    CloudProviderStage, CorsConfig, CustomChecksStage, CustomErrorResponses, DetectConfig,
-    DetectVerdict, DetectionExclusionConfig, EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE,
-    FORBIDDEN_MESSAGE, GateAnswer, GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody,
-    GuardClientIp, GuardConfigError, GuardLayer, GuardService, GuardStageLayer, GuardStageService,
-    HeaderAuthRules, HeadersAuthAnswer, HeadersAuthStage, HttpsEnforcementStage, HttpsRedirect,
-    IpBanConfig, IpBanConfigError, IpBanManager, IpGateConfig, IpGateDecision, IpGateDenial,
-    IpGateError, IpGateVerdict, LogFormat, LogLevel, OVERSIZE_MESSAGE, ObservabilityConfig,
-    OnBlockHook, RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL, RateLimitConfig, RateLimitConfigError,
+    ACTIVITY_BANNED_MESSAGE, AgentStats, AuthVerifier, BANNED_MESSAGE, BLOCKED_MESSAGE, BanError,
+    BanRecord, BanStore, BehaviorRule, BlockPayload, BoxError, BufferOverflowPolicy, ClientPolicy,
+    Clock, CloudConfigError, CloudDecision, CloudProviderStage, CloudRefresh,
+    CloudRefreshScheduler, CompositeAgentHandler, CorsConfig, CustomChecksStage,
+    CustomErrorResponses, CustomRequestContext, CustomRequestFn, CustomResponse, DetectConfig,
+    DetectVerdict, DetectionExclusionConfig, Distributed, DynamicRules, DynamicRulesHandle,
+    EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GateAnswer,
+    GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody, GuardClientIp,
+    GuardConfigError, GuardExclusionScoped, GuardLayer, GuardService, GuardStageLayer,
+    GuardStageService, HeaderAuthRules, HeadersAuthAnswer, HeadersAuthStage, HttpsEnforcementStage,
+    HttpsRedirect, IpBanConfig, IpBanConfigError, IpBanManager, IpGateConfig, IpGateDecision,
+    IpGateDenial, IpGateError, IpGateVerdict, LogFormat, LogLevel, LogfireClient, MetricsCollector,
+    OVERSIZE_MESSAGE, ObservabilityConfig, OnBlockHook, OnErrorFn, PathExclusions,
+    RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL, RateLimitConfig, RateLimitConfigError,
     RateLimitDecision, RateLimitEntry, RateLimitStage, RateLimitStageConfig, RateLimitTier,
-    RateLimiter, RequestLoggingStage, RequestLoggingStageConfig, RequestObservation,
-    RequiredHeader, ResolvedBan, ResponseProcessor, RouteConfig, RouteConfigResolver,
-    RouteDetectionExclusions, RouteGuard, RouteRateLimits, RouteRateResolver, SecurityConfig,
-    SecurityConfigError, SecurityEventBus, SecurityHeadersConfig, SlidingWindowStore,
-    StageResponse, Threat, ThreatBanEntry, TierDecision, TimeWindowStage, UserAgentConfigError,
-    UserAgentStage, UserAgentStageConfig, ViolationCounters, default_config, provided_layers,
+    RateLimiter, RequestBits, RequestLoggingStage, RequestLoggingStageConfig, RequestObservation,
+    RequiredHeader, ResolvedBan, ResponseBits, ResponseModifierFn, ResponseProcessor, RouteConfig,
+    RouteConfigResolver, RouteDetectionExclusions, RouteGuard, RouteRateLimits, RouteRateResolver,
+    SecurityConfig, SecurityConfigError, SecurityEvent, SecurityEventBus, SecurityHeadersConfig,
+    SecurityMetric, SlidingWindowStore, StageResponse, StoreError, TelemetryError,
+    TelemetryHandler, Threat, ThreatBanEntry, TierDecision, TimeWindowStage, UserAgentConfigError,
+    UserAgentFilter, UserAgentStage, UserAgentStageConfig, ViolationCounters, Wiring, WiringError,
+    WiringOptions, default_config, provided_layers,
 };
 
 pub mod status;
@@ -347,4 +353,20 @@ pub fn with_guard(config: DetectConfig) -> GuardLayer {
 /// ```
 pub fn with_security_config(config: &SecurityConfig) -> Result<GuardLayer, GuardConfigError> {
     GuardLayer::from_security_config(config)
+}
+
+/// [`with_security_config`] with the host-supplied pieces the config cannot
+/// carry: the telemetry sink (the guard-agent-rs agent, through the facade's
+/// [`TelemetryHandler`] trait) and the Logfire client, passed in
+/// [`WiringOptions`]. With an agent injected, [`GuardLayer::agent_stats`]
+/// reports `enabled`.
+///
+/// # Errors
+///
+/// [`GuardConfigError`], as for [`with_security_config`].
+pub fn with_security_config_with(
+    config: &SecurityConfig,
+    options: &WiringOptions,
+) -> Result<GuardLayer, GuardConfigError> {
+    GuardLayer::from_security_config_with(config, options)
 }

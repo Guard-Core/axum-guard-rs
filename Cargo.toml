@@ -29,11 +29,10 @@ guard-core-engine = { path = "../guard-core-rs/crates/guard-core-engine", versio
 # route's geo-health snapshot renders (same path/version discipline as the
 # engine above).
 guard-core-rs = { path = "../guard-core-rs/crates/guard-core-rs", version = "4.3.2" }
-# tower-guard-rs 1.4.0 is published to crates.io (itself pinned to
-# guard-core-engine 4.3.1); the path points at a sibling tower-guard-rs
-# checkout so local builds and CI (see .github/workflows/ci.yml) exercise the
-# stack from source. The version pin stays in lockstep with the published
-# release.
+# tower-guard-rs is published to crates.io; the path points at a sibling
+# tower-guard-rs checkout so local builds and CI (see
+# .github/workflows/ci.yml) exercise the stack from source. The version pin
+# stays in lockstep with the published release.
 tower-guard-rs = { path = "../tower-guard-rs", version = "1.5.0" }
 # Direct handle on the `Layer`/`Service` traits the `ClientIpLayer` implements;
 # tower 0.5 is already the resolved version through tower-guard-rs.
