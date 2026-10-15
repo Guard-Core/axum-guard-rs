@@ -179,26 +179,28 @@ pub use tower_guard_rs::{
     DetectVerdict, DetectionExclusionConfig, Distributed, DynamicRules, DynamicRulesHandle,
     EmergencyAnswer, EmergencyModeStage, FAILURE_MESSAGE, FORBIDDEN_MESSAGE, GateAnswer,
     GeoDecision, GeoIpHandler, GeoStage, GeoStageConfig, GuardBody, GuardClientIp,
-    GuardConfigError, GuardExclusionScoped, GuardLayer, GuardService, GuardStageLayer,
-    GuardStageService, HeaderAuthRules, HeadersAuthAnswer, HeadersAuthStage, HttpsEnforcementStage,
-    HttpsRedirect, IpBanConfig, IpBanConfigError, IpBanManager, IpGateConfig, IpGateDecision,
-    IpGateDenial, IpGateError, IpGateVerdict, LogFormat, LogLevel, LogfireClient, MetricsCollector,
-    OVERSIZE_MESSAGE, ObservabilityConfig, OnBlockHook, OnErrorFn, PathExclusions,
-    RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL, RateLimitConfig, RateLimitConfigError,
+    GuardConfigError, GuardExclusionScoped, GuardLayer, GuardRouteUnresolved, GuardService,
+    GuardStageLayer, GuardStageService, HeaderAuthRules, HeadersAuthAnswer, HeadersAuthStage,
+    HttpsEnforcementStage, HttpsRedirect, IpBanConfig, IpBanConfigError, IpBanManager,
+    IpGateConfig, IpGateDecision, IpGateDenial, IpGateError, IpGateVerdict, LogFormat, LogLevel,
+    LogfireClient, MetricsCollector, OVERSIZE_MESSAGE, ObservabilityConfig, OnBlockHook, OnErrorFn,
+    PathExclusions, RATE_LIMITED_MESSAGE, REQUIRED_SENTINEL, RateLimitConfig, RateLimitConfigError,
     RateLimitDecision, RateLimitEntry, RateLimitStage, RateLimitStageConfig, RateLimitTier,
     RateLimiter, RequestBits, RequestLoggingStage, RequestLoggingStageConfig, RequestObservation,
     RequiredHeader, ResolvedBan, ResponseBits, ResponseModifierFn, ResponseProcessor, RouteConfig,
     RouteConfigResolver, RouteDetectionExclusions, RouteGuard, RouteRateLimits, RouteRateResolver,
     SecurityConfig, SecurityConfigError, SecurityEvent, SecurityEventBus, SecurityHeadersConfig,
-    SecurityMetric, SlidingWindowStore, StageResponse, StoreError, TelemetryError,
+    SecurityMetric, SleepFn, SlidingWindowStore, StageResponse, StoreError, TelemetryError,
     TelemetryHandler, Threat, ThreatBanEntry, TierDecision, TimeWindowStage, UserAgentConfigError,
     UserAgentFilter, UserAgentStage, UserAgentStageConfig, ViolationCounters, Wiring, WiringError,
     WiringOptions, default_config, provided_layers,
 };
+pub use tower_guard_rs::{LiveCell, LiveContext, LiveStages};
 
 pub mod status;
 pub mod websocket;
 
+use axum::extract::MatchedPath;
 use axum::extract::connect_info::ConnectInfo;
 use std::net::SocketAddr;
 use std::task::{Context, Poll};
@@ -273,6 +275,84 @@ where
     }
 }
 
+/// Mark every request axum could not resolve to a route as
+/// [`GuardRouteUnresolved`] (the reference `guard_route_unresolved`), the
+/// input of `route_resolution_strict`.
+///
+/// axum records the matched route in the [`MatchedPath`] request extension
+/// once it has routed the request, so the layer must run after routing:
+/// add it with [`Router::layer`](axum::Router::layer), after the guard (the
+/// last-added layer runs first, so it marks the request before the guard
+/// reads it). A request that reaches the fallback carries no matched path
+/// and is marked. With `route_resolution_strict = false` the marker is inert.
+///
+/// # Example
+///
+/// ```
+/// use axum::Router;
+/// use axum::routing::get;
+/// use axum_guard_rs::{SecurityConfig, route_resolution_layer, with_security_config};
+///
+/// let config = SecurityConfig {
+///     route_resolution_strict: true,
+///     enable_redis: false,
+///     ..SecurityConfig::default()
+/// };
+/// let app: Router = Router::new()
+///     .route("/hello", get(|| async { "hello" }))
+///     .layer(with_security_config(&config).expect("valid config"))
+///     .layer(route_resolution_layer());
+/// # let _ = app;
+/// ```
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RouteResolutionLayer;
+
+impl<S> Layer<S> for RouteResolutionLayer {
+    type Service = RouteResolutionService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RouteResolutionService { inner }
+    }
+}
+
+/// The service [`RouteResolutionLayer`] builds.
+#[derive(Debug, Clone)]
+pub struct RouteResolutionService<S> {
+    inner: S,
+}
+
+impl<S, B> Service<axum::extract::Request<B>> for RouteResolutionService<S>
+where
+    S: Service<axum::extract::Request<B>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), S::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut request: axum::extract::Request<B>) -> Self::Future {
+        if request.extensions().get::<MatchedPath>().is_none() {
+            request.extensions_mut().insert(GuardRouteUnresolved);
+        }
+        self.inner.call(request)
+    }
+}
+
+/// The [`RouteResolutionLayer`].
+#[must_use]
+pub const fn route_resolution_layer() -> RouteResolutionLayer {
+    RouteResolutionLayer
+}
+
+/// The tokio timer the guard races the request-body read against
+/// (`body_read_timeout`).
+fn tokio_timer() -> SleepFn {
+    std::sync::Arc::new(|duration| Box::pin(tokio::time::sleep(duration)))
+}
+
 /// A [`ClientIpLayer`], in the style of the axum layer constructors.
 #[must_use]
 pub const fn client_ip_layer() -> ClientIpLayer {
@@ -333,9 +413,9 @@ pub fn with_guard(config: DetectConfig) -> GuardLayer {
 ///
 /// # Errors
 ///
-/// [`GuardConfigError`] when an engine constructor rejects a value (an
-/// invalid IP/CIDR list entry, a zero rate-limit knob, or a ReDoS-unsafe
-/// blocked user-agent pattern).
+/// [`GuardConfigError`] when the config fails validation or an engine
+/// constructor rejects a value (an invalid IP/CIDR list entry, a zero
+/// rate-limit knob, or a ReDoS-unsafe blocked user-agent pattern).
 ///
 /// # Example
 ///
@@ -352,7 +432,7 @@ pub fn with_guard(config: DetectConfig) -> GuardLayer {
 /// # let _ = app;
 /// ```
 pub fn with_security_config(config: &SecurityConfig) -> Result<GuardLayer, GuardConfigError> {
-    GuardLayer::from_security_config(config)
+    Ok(GuardLayer::from_security_config(config)?.with_body_timer(tokio_timer()))
 }
 
 /// [`with_security_config`] with the host-supplied pieces the config cannot
@@ -368,5 +448,5 @@ pub fn with_security_config_with(
     config: &SecurityConfig,
     options: &WiringOptions,
 ) -> Result<GuardLayer, GuardConfigError> {
-    GuardLayer::from_security_config_with(config, options)
+    Ok(GuardLayer::from_security_config_with(config, options)?.with_body_timer(tokio_timer()))
 }

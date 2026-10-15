@@ -156,8 +156,14 @@ fn the_wiring_surface_is_reexported() {
         whitelist: Some(vec![String::from("nope")]),
         ..SecurityConfig::default()
     };
+    // The validator names the bad list first; the stage constructor stays the
+    // second line of defence for an unvalidated config.
     assert!(matches!(
         Wiring::from_security_config(&bad),
+        Err(WiringError::Config(_))
+    ));
+    assert!(matches!(
+        Wiring::build_unvalidated(&bad, &WiringOptions::default()),
         Err(WiringError::IpGate(_))
     ));
 }
