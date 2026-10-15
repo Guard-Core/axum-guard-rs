@@ -17,7 +17,7 @@ categories = ["web-programming"]
 name = "axum_guard_rs"
 
 [dependencies]
-axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "matched-path", "tokio"] }
 # guard-core-engine is published to crates.io (4.3.2); the path points at the
 # engine crate inside a sibling guard-core-rs checkout so local builds and CI
 # (see .github/workflows/ci.yml) exercise the engine from source. The version
@@ -38,6 +38,16 @@ tower-guard-rs = { path = "../tower-guard-rs", version = "1.5.0" }
 # tower 0.5 is already the resolved version through tower-guard-rs.
 tower = { version = "0.5", default-features = false }
 serde_json = "1"
+# The timer `with_security_config` hands the layer for `body_read_timeout`
+# (axum already runs on tokio; only its `time` feature is needed here).
+tokio = { version = "1", default-features = false, features = ["time"] }
+
+[features]
+default = []
+# Forward the facade's Redis backend (`enable_redis` with a `redis_url`).
+redis = ["tower-guard-rs/redis"]
+# Build the telemetry agent from `SecurityConfig` (see tower-guard-rs).
+agent = ["tower-guard-rs/agent"]
 
 [dev-dependencies]
 chrono = "0.4"
@@ -47,11 +57,18 @@ bytes = "1.10"
 # the engine primitives through the direct dependency above.
 guard-core-rs = { path = "../guard-core-rs/crates/guard-core-rs", version = "4.3.2" }
 http = "1.3"
+http-body = "1.0"
 http-body-util = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }
+
+# One guard-core-rs for the whole graph under the `agent` feature (see
+# tower-guard-rs): the registry copy guard-agent-rs names resolves to the
+# sibling checkout this crate builds against.
+[patch.crates-io]
+guard-core-rs = { path = "../guard-core-rs/crates/guard-core-rs" }
 
 [lints.rust]
 unsafe_code = "forbid"

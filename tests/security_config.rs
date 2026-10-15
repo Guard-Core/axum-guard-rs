@@ -129,7 +129,16 @@ fn invalid_ip_list_entry_fails_closed() {
         whitelist: Some(vec![String::from("not-an-ip")]),
         ..SecurityConfig::default()
     };
+    // The validator names the bad list first.
     let error = with_security_config(&config).unwrap_err();
+    assert!(matches!(error, GuardConfigError::Config(_)));
+    // The stage constructor stays the second line of defence for an
+    // unvalidated config.
+    let error: GuardConfigError =
+        axum_guard_rs::Wiring::build_unvalidated(&config, &axum_guard_rs::WiringOptions::default())
+            .map(|_| ())
+            .unwrap_err()
+            .into();
     assert!(matches!(error, GuardConfigError::IpGate(_)));
 }
 
@@ -335,7 +344,11 @@ fn reexported_error_display_names_the_engine_surface() {
         whitelist: Some(vec![String::from("nope")]),
         ..SecurityConfig::default()
     };
-    let error = with_security_config(&config).unwrap_err();
+    let error: GuardConfigError =
+        axum_guard_rs::Wiring::build_unvalidated(&config, &axum_guard_rs::WiringOptions::default())
+            .map(|_| ())
+            .unwrap_err()
+            .into();
     let rendered = error.to_string();
     assert!(rendered.contains("ip list"), "{rendered}");
     assert!(std::error::Error::source(&error).is_some());

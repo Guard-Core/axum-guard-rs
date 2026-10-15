@@ -9,10 +9,13 @@ Unreleased
 
 - The axum surface follows the tower parity work: `with_security_config_with(config, &WiringOptions)` (the telemetry agent is injected through the facade's `TelemetryHandler`, which makes `agent_stats()` report `enabled`), and the tower additions are re-exported (`ClientPolicy`, `CloudRefresh`, `Distributed`, `DynamicRules`, `DynamicRulesHandle`, `Wiring`, `WiringError`, `WiringOptions`, `GuardExclusionScoped`, `PathExclusions`, `CompositeAgentHandler`, `LogfireClient`, `TelemetryHandler`, `TelemetryError`, `AuthVerifier`, `SecurityEvent`, `SecurityMetric`, `MetricsCollector` and the custom-check and response-pass types)
 - `WebSocketGuardConfig::with_client_policy(ClientPolicy)`: the upgrade's connecting peer (`GuardClientIp` or `ConnectInfo`) is resolved with `X-Forwarded-For` through the same policy the HTTP guard uses, so behind a trusted proxy the forwarded client is banned, gated and rate limited, and `fail_secure` comes from the policy (`with_fail_secure` keeps working)
+- `route_resolution_layer()` (`RouteResolutionLayer`): marks a request axum could not route (no `MatchedPath`) as `GuardRouteUnresolved`, the input of `route_resolution_strict`
+- `with_security_config` installs the tokio timer for `body_read_timeout` (`408 Request body read timed out`), validates the config (`GuardConfigError::Config`) and reads the stages a dynamic rule can change from the live config per request; the `agent` and `redis` cargo features forward to tower-guard-rs
 - `GuardStatus::from_wiring(&Wiring)`: the status route reads the cloud table the wiring's refresh fills and marks the geo-ip component configured when the wiring carries a geo handler
 
 ### Changed
 
+- The route usage rules run after the check pipeline, just before the handler (tower-guard-rs), as the reference does
 - `with_security_config` inherits the tower behavior: `exclude_paths` is scoped (bans, the global IP, country and cloud rules and the rate limit still apply on an excluded path, with the response pass minus return rules), and a request with no peer address is refused with `403` under the `fail_secure` default, so `client_ip_layer` (which copies `ConnectInfo<SocketAddr>` into `GuardClientIp`) must be applied and the router served with `into_make_service_with_connect_info::<SocketAddr>()`
 - The config-driven stages tower now installs (geo country rules, cloud providers, endpoint rate limits, auto-ban, custom request check, auth verifier, trusted proxies, expose headers) are reachable through `with_security_config`; `GuardConfigError` gains `Cloud`, `Redis` and `Geo` variants
 - The `exclude_paths_bypass_the_pipeline` test became `exclude_paths_are_scoped_not_a_bypass` to pin the reference scoped behavior
