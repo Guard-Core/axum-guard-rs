@@ -30,6 +30,7 @@ use axum::response::Response;
 use axum::routing::get;
 use guard_core_engine::cloud_provider::{CloudIpTable, ProviderStatus, VALID_CLOUD_PROVIDERS};
 use guard_core_rs::geo_lifecycle::IpInfoManager;
+use guard_core_rs::wiring::Wiring;
 use std::fmt::Write;
 
 /// The path `add_status_route` registers by default (the reference's
@@ -60,6 +61,22 @@ impl GuardStatus {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A snapshot fed from a [`Wiring`] (the one `SecurityConfig` mapping the
+    /// layer was built from): the cloud table is the wiring's refresh table
+    /// (shared, so refreshes the layer schedules are visible) and the geo-ip
+    /// component is marked configured when the wiring carries a geo handler.
+    #[must_use]
+    pub fn from_wiring(wiring: &Wiring) -> Self {
+        Self {
+            cloud: wiring
+                .cloud_refresh
+                .as_ref()
+                .map(|refresh| (*refresh.table).clone()),
+            geo_configured: wiring.geo_handler.is_some(),
+            geo_manager: None,
+        }
     }
 
     /// Serve the readiness flags from this cloud table (the one the
