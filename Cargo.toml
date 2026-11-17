@@ -51,7 +51,7 @@ redis = ["tower-guard-rs/redis"]
 agent = ["tower-guard-rs/agent"]
 
 [dev-dependencies]
-chrono = "0.4"
+jiff = { version = "1.0", default-features = false, features = ["std"] }
 bytes = "1.10"
 # guard-core-rs stays a dev dependency: the runtime surfaces this crate
 # re-exports all come from `tower-guard-rs`, and the websocket guard runs
