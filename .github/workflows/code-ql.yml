@@ -37,8 +37,7 @@ jobs:
           repository: Guard-Core/tower-guard-rs
           # The stage composition merged as rennf93/tower-guard-rs#35;
           # master carries it.
-          # TEMPORARY companion pin (tower-guard-rs moves to jiff); reset to master after the train merges.
-          ref: fix/chrono-to-jiff
+          ref: master
           path: tower-checkout
           persist-credentials: false
 
