@@ -56,10 +56,19 @@ jobs:
           path: core-checkout
           persist-credentials: false
 
+      - name: Checkout guard-agent-rs (path dependency)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Guard-Core/guard-agent-rs
+          ref: master
+          path: agent-checkout
+          persist-credentials: false
+
       - name: Place siblings at the path dependency locations
         run: |
           mv tower-checkout ../tower-guard-rs
           mv core-checkout ../guard-core-rs
+          mv agent-checkout ../guard-agent-rs
 
       - name: Install the stable Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
@@ -118,10 +127,19 @@ jobs:
           path: core-checkout
           persist-credentials: false
 
+      - name: Checkout guard-agent-rs (path dependency)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Guard-Core/guard-agent-rs
+          ref: master
+          path: agent-checkout
+          persist-credentials: false
+
       - name: Place siblings at the path dependency locations
         run: |
           mv tower-checkout ../tower-guard-rs
           mv core-checkout ../guard-core-rs
+          mv agent-checkout ../guard-agent-rs
 
       - name: Install the stable Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
@@ -201,10 +219,19 @@ jobs:
           path: core-checkout
           persist-credentials: false
 
+      - name: Checkout guard-agent-rs (path dependency)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Guard-Core/guard-agent-rs
+          ref: master
+          path: agent-checkout
+          persist-credentials: false
+
       - name: Place siblings at the path dependency locations
         run: |
           mv tower-checkout ../tower-guard-rs
           mv core-checkout ../guard-core-rs
+          mv agent-checkout ../guard-agent-rs
 
       - name: Install the MSRV Rust toolchain (1.92)
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1

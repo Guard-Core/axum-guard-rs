@@ -9,10 +9,11 @@ services:
       context: ../..
       dockerfile: examples/simple_app/Dockerfile
       additional_contexts:
-        # Sibling checkouts; CI places them at ../tower-guard-rs and
-        # ../guard-core-rs.
+        # Sibling checkouts; CI places them at ../tower-guard-rs,
+        # ../guard-core-rs and ../guard-agent-rs.
         tower: ../../../tower-guard-rs
         engine: ../../../guard-core-rs
+        agent: ../../../guard-agent-rs
     image: axum-guard-rs-simple-app:local
     ports:
       - "${SMOKE_PORT:-8080}:8080"
