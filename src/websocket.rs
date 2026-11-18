@@ -984,6 +984,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_guard_client_ip_extension_names_the_banned_peer() {
+        let manager = IpBanManager::new();
+        let ip: IpAddr = "203.0.113.10".parse().expect("ip");
+        manager.ban_ip(ip, 60, "test ban").expect("ban");
+        let config = WebSocketGuardConfig::new(detect_config()).with_ip_banning(manager);
+        let app: Router = Router::new()
+            .route("/ws", get(upgraded))
+            .layer(websocket_guard(config));
+        let mut request = Request::builder()
+            .uri("/ws")
+            .header("Upgrade", "websocket")
+            .header("Connection", "Upgrade")
+            .body(Body::empty())
+            .expect("request");
+        request.extensions_mut().insert(GuardClientIp(ip));
+        let response = app.oneshot(request).await.expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            response
+                .headers()
+                .get(WS_CLOSE_REASON_HEADER)
+                .and_then(|value| value.to_str().ok()),
+            Some("IP banned")
+        );
+    }
+
+    #[tokio::test]
     async fn blocked_upgrade_is_rejected_pre_accept() {
         let manager = IpBanManager::new();
         let ip: IpAddr = "203.0.113.9".parse().expect("ip");
