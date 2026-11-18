@@ -3,8 +3,8 @@
 #
 # The adapter consumes its siblings as path dependencies, so the build needs
 # their source too. They are provided through additional build contexts named
-# "tower" and "engine" (compose additional_contexts / docker --build-context
-# pointing at sibling checkouts); only manifests and source are copied out of
+# "tower", "engine" and "agent" (compose additional_contexts / docker
+# --build-context pointing at sibling checkouts); only manifests and source are copied out of
 # those contexts.
 FROM rust:1.95-slim-bookworm AS build
 
@@ -14,6 +14,10 @@ COPY --from=engine /Cargo.toml ./guard-core-rs/Cargo.toml
 COPY --from=engine /Cargo.lock ./guard-core-rs/Cargo.lock
 COPY --from=engine /crates/guard-core-engine ./guard-core-rs/crates/guard-core-engine
 COPY --from=engine /crates/guard-core-rs ./guard-core-rs/crates/guard-core-rs
+
+COPY --from=agent /Cargo.toml ./guard-agent-rs/Cargo.toml
+COPY --from=agent /Cargo.lock ./guard-agent-rs/Cargo.lock
+COPY --from=agent /src ./guard-agent-rs/src
 
 COPY --from=tower /Cargo.toml ./tower-guard-rs/Cargo.toml
 COPY --from=tower /Cargo.lock ./tower-guard-rs/Cargo.lock
